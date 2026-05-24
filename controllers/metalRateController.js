@@ -19,4 +19,14 @@ const getMetalRates = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { getMetalRates };
+const updateMetalRates = asyncHandler(async (req, res) => {
+  const rates = await metalRateService.updateLatestRates();
+
+  return res.status(200).json({
+    goldRate: rates.goldRate,
+    silverRate: rates.silverRate,
+    updatedAt: rates.updatedAt,
+  });
+});
+
+module.exports = { getMetalRates, updateMetalRates };

@@ -18,6 +18,11 @@ const formatWeight = (value) => {
   return Number.isFinite(number) ? number.toFixed(3) : "0.000";
 };
 
+const hasPrintableWeight = (value) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) && number > 0;
+};
+
 const formatCategory = (item) => {
   const categoryCode = escapeZplText(item.categoryCode || "");
   const category = escapeZplText(item.category || "");
@@ -63,7 +68,21 @@ const generateTagLabelZpl = (item) => {
   const barcodeValue = normalizeTagBarcodeValue(item.tagId || item.tagNo);
   const grossWeight = formatWeight(item.grossWeight ?? item.weight);
   const stoneWeight = formatWeight(item.stoneWeight);
+  const shouldPrintStoneWeight = hasPrintableWeight(item.stoneWeight);
   const category = formatCategory(item);
+  const sellerName = escapeZplText(item.sellerName || item.seller || "").slice(0, 24);
+  const sellerY = 88;
+  const detailLines = [
+    `^FO18,62^A0N,24,14^FDWt:${grossWeight}^FS`,
+  ];
+
+  if (shouldPrintStoneWeight) {
+    detailLines.push(`^FO150,62^A0N,24,14^FDSt:${stoneWeight}^FS`);
+  }
+
+  if (sellerName) {
+    detailLines.push(`^FO18,${sellerY}^A0N,23,19^FDSeller:${sellerName}^FS`);
+  }
 
   return [
     "^XA",
@@ -72,14 +91,13 @@ const generateTagLabelZpl = (item) => {
     `^LL${LABEL.heightDots}`,
     "^LH0,0",
     "^PR3",
-    "^MD20",
+    "^MD30",
     "^BY1,3.25,68",
-    "^A0N,60,54",
+    "^A0N,64,58",
     // Left section: tag code and jewellery weights.
-    `^FO18,10^A0N,25,23^FD${escapeZplText(barcodeValue)}^FS`,
-    `^FO18,38^A0N,21,19^FD${category}^FS`,
-    `^FO18,62^A0N,21,19^FDWt: ${grossWeight}^FS`,
-    `^FO18,86^A0N,21,19^FDSt.Wt: ${stoneWeight}^FS`,
+    `^FO18,8^A0N,31,29^FD${escapeZplText(barcodeValue)}^FS`,
+    `^FO18,38^A0N,26,24^FD${category}^FS`,
+    ...detailLines,
     // Right section: CODE128 barcode with human-readable tag id below it.
     `^FO276,4^BCN,78,Y,N,N^FD${barcodeValue}^FS`,
     "^XZ",

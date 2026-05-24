@@ -214,6 +214,7 @@ const createTagsFromStockItem = async (item, seller, transactionDate, category) 
       quantity: 1,
       weight: tag.weight,
       stoneWeight: tag.stoneWeight || 0,
+      sellerName: seller.name,
     });
   }
 

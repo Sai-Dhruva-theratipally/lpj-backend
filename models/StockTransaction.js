@@ -57,6 +57,10 @@ const stockTransactionItemSchema = new mongoose.Schema(
       min: 0,
       default: 0,
     },
+    sellerName: {
+      type: String,
+      trim: true,
+    },
   },
   { _id: false }
 );
