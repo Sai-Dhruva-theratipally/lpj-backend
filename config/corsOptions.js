@@ -15,12 +15,14 @@ const envAllowedOrigins = (process.env.CLIENT_URL || "")
 const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...envAllowedOrigins])];
 const devLanOriginPattern =
   /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}):517[3-5]$/;
+const vercelFrontendOriginPattern = /^https:\/\/lpj-frontend(?:-[a-z0-9-]+)?\.vercel\.app$/;
 
 const corsOptions = {
   origin(origin, callback) {
     if (
       !origin ||
       allowedOrigins.includes(origin) ||
+      vercelFrontendOriginPattern.test(origin) ||
       (process.env.NODE_ENV !== "production" && devLanOriginPattern.test(origin))
     ) {
       return callback(null, true);
