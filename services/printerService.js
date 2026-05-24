@@ -7,27 +7,26 @@ const {
   generateTrayLabelZpl,
 } = require("./zplService");
 
-const normalizeCode = (value) => String(value || "").trim().toUpperCase();
-const normalizeNameKey = (value) => String(value || "").trim().toLowerCase();
+const normalizeToUppercase = (value) => String(value || "").trim().toUpperCase();
 
 const findInventoryForPrint = async ({ id, inventoryId, tagId, trayCode, trayName, stockType }) => {
   const identifier = id || inventoryId;
   const filters = [];
 
   if (identifier) {
-    const idValue = String(identifier).trim();
-    const numericId = Number(idValue);
+    const normalizedId = normalizeToUppercase(identifier);
+    const numericId = Number(normalizedId);
 
-    if (/^[a-f\d]{24}$/i.test(idValue)) {
-      filters.push({ _id: idValue });
+    if (/^[a-f\d]{24}$/i.test(normalizedId)) {
+      filters.push({ _id: normalizedId });
     }
 
     if (!Number.isNaN(numericId)) {
       filters.push({ tagId: numericId, stockType: "TAG" });
     }
 
-    filters.push({ trayCode: normalizeCode(idValue), stockType: "TRAY" });
-    filters.push({ trayNameKey: normalizeNameKey(idValue), stockType: "TRAY" });
+    filters.push({ trayCode: normalizedId, stockType: "TRAY" });
+    filters.push({ trayName: normalizedId, stockType: "TRAY" });
   }
 
   if (tagId) {
@@ -35,11 +34,11 @@ const findInventoryForPrint = async ({ id, inventoryId, tagId, trayCode, trayNam
   }
 
   if (trayCode) {
-    filters.push({ trayCode: normalizeCode(trayCode), stockType: "TRAY" });
+    filters.push({ trayCode: normalizeToUppercase(trayCode), stockType: "TRAY" });
   }
 
   if (trayName) {
-    filters.push({ trayNameKey: normalizeNameKey(trayName), stockType: "TRAY" });
+    filters.push({ trayName: normalizeToUppercase(trayName), stockType: "TRAY" });
   }
 
   if (filters.length === 0) {

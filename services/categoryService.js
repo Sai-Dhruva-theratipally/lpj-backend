@@ -1,7 +1,6 @@
 const Category = require("../models/Category");
 
-const normalizeCategoryKey = (name) => name.trim().toLowerCase();
-const normalizeCode = (code) => code.trim().toUpperCase();
+const normalizeToUppercase = (value) => value.trim().toUpperCase();
 const normalizeMetalType = (metalType) => metalType.trim().toUpperCase();
 
 const getCategories = async (query = {}) => {
@@ -9,10 +8,11 @@ const getCategories = async (query = {}) => {
   const andFilters = [];
 
   if (query.search) {
+    const searchUpper = normalizeToUppercase(query.search);
     andFilters.push({
       $or: [
-        { name: new RegExp(query.search, "i") },
-        { categoryCode: new RegExp(query.search, "i") },
+        { name: new RegExp(searchUpper) },
+        { categoryCode: new RegExp(searchUpper) },
       ],
     });
   }
@@ -35,13 +35,13 @@ const getCategories = async (query = {}) => {
 };
 
 const findCategoryByNameOrCode = async ({ input, stockType, metalType }) => {
-  const trimmedInput = input.trim();
+  const normalizedInput = normalizeToUppercase(input);
   const normalizedMetalType = normalizeMetalType(metalType);
   const filters = {
     metalType: normalizedMetalType,
     $or: [
-      { nameKey: normalizeCategoryKey(trimmedInput) },
-      { categoryCodeKey: normalizeCode(trimmedInput) },
+      { name: normalizedInput },
+      { categoryCode: normalizedInput },
     ],
   };
 
@@ -57,12 +57,11 @@ const findCategoryByNameOrCode = async ({ input, stockType, metalType }) => {
 };
 
 const findOrCreateCategory = async (name, stockType, metalType, categoryCode) => {
-  const trimmedName = name.trim();
+  const normalizedName = normalizeToUppercase(name);
   const normalizedMetalType = normalizeMetalType(metalType);
-  const nameKey = normalizeCategoryKey(trimmedName);
-  const categoryCodeKey = categoryCode ? normalizeCode(categoryCode) : undefined;
+  const normalizedCode = categoryCode ? normalizeToUppercase(categoryCode) : undefined;
 
-  const category = await Category.findOne({ metalType: normalizedMetalType, nameKey });
+  const category = await Category.findOne({ metalType: normalizedMetalType, name: normalizedName });
 
   if (category) {
     if (stockType && !category.stockTypes.includes(stockType)) {
@@ -73,13 +72,13 @@ const findOrCreateCategory = async (name, stockType, metalType, categoryCode) =>
     return category;
   }
 
-  if (!categoryCodeKey) {
+  if (!normalizedCode) {
     const error = new Error("Category code is required for new category");
     error.statusCode = 400;
     throw error;
   }
 
-  const duplicateCode = await Category.findOne({ categoryCodeKey });
+  const duplicateCode = await Category.findOne({ categoryCode: normalizedCode });
 
   if (duplicateCode) {
     const error = new Error("Category code already exists");
@@ -88,10 +87,8 @@ const findOrCreateCategory = async (name, stockType, metalType, categoryCode) =>
   }
 
   return Category.create({
-    name: trimmedName,
-    nameKey,
-    categoryCode: categoryCodeKey,
-    categoryCodeKey,
+    name: normalizedName,
+    categoryCode: normalizedCode,
     metalType: normalizedMetalType,
     stockTypes: stockType ? [stockType] : [],
   });

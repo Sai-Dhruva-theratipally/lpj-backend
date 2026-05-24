@@ -6,8 +6,7 @@ const categoryService = require("./categoryService");
 const sellerService = require("./sellerService");
 const { getNextTagCode } = require("../utils/tagCode");
 
-const normalizeCode = (value) => value.trim().toUpperCase();
-const normalizeNameKey = (value) => value.trim().toLowerCase();
+const normalizeToUppercase = (value) => value.trim().toUpperCase();
 
 const nextSequence = async (counterId, startAt) => {
   const counter = await Counter.findByIdAndUpdate(counterId, { $inc: { seq: 1 } }, { new: true });
@@ -41,20 +40,22 @@ const normalizeDecimal = (value, fallback = 0) => {
 };
 
 const findInventoryByIdentifier = async (identifier) => {
-  const trimmedIdentifier = String(identifier || "").trim();
+  const normalizedIdentifier = normalizeToUppercase(identifier || "");
 
-  if (!trimmedIdentifier) {
+  if (!normalizedIdentifier) {
     const error = new Error("Barcode or id is required");
     error.statusCode = 400;
     throw error;
   }
 
-  const numericIdentifier = Number(trimmedIdentifier);
-  const isMongoId = /^[a-f\d]{24}$/i.test(trimmedIdentifier);
+  const numericIdentifier = Number(normalizedIdentifier);
+  const isMongoId = /^[a-f\d]{24}$/i.test(normalizedIdentifier);
 
   const filters = [
-    { trayCode: normalizeCode(trimmedIdentifier), stockType: "TRAY" },
-    { trayNameKey: normalizeNameKey(trimmedIdentifier), stockType: "TRAY" },
+    { trayCode: normalizedIdentifier, stockType: "TRAY" },
+    { trayName: normalizedIdentifier, stockType: "TRAY" },
+    { category: normalizedIdentifier, stockType: "TRAY" },
+    { categoryCode: normalizedIdentifier, stockType: "TRAY" },
   ];
 
   if (!Number.isNaN(numericIdentifier)) {
@@ -62,7 +63,7 @@ const findInventoryByIdentifier = async (identifier) => {
   }
 
   if (isMongoId) {
-    filters.push({ _id: trimmedIdentifier });
+    filters.push({ _id: normalizedIdentifier });
   }
 
   const inventory = await Inventory.findOne({
@@ -112,9 +113,8 @@ const createOrUpdateTrayFromStockItem = async (item, seller, transactionDate) =>
     throw error;
   }
 
-  const trayCode = normalizeCode(category.categoryCode);
-  const trayName = category.name;
-  const trayNameKey = normalizeNameKey(trayName);
+  const trayCode = normalizeToUppercase(category.categoryCode);
+  const trayName = normalizeToUppercase(category.name);
   const quantity = Number(item.quantity);
   const weight = normalizeDecimal(item.weight);
   const stoneWeight = normalizeDecimal(item.stoneWeight);
@@ -122,7 +122,7 @@ const createOrUpdateTrayFromStockItem = async (item, seller, transactionDate) =>
   let tray = await Inventory.findOne({
     stockType: "TRAY",
     metalType: category.metalType,
-    $or: [{ trayCode }, { trayNameKey }],
+    $or: [{ trayCode }, { trayName }],
   });
 
   if (!tray) {
@@ -130,7 +130,6 @@ const createOrUpdateTrayFromStockItem = async (item, seller, transactionDate) =>
       stockType: "TRAY",
       trayCode,
       trayName,
-      trayNameKey,
       category: category.name,
       categoryCode: category.categoryCode,
       metalType: category.metalType,
@@ -371,8 +370,68 @@ const createSaleTransaction = async (payload) => {
   });
 };
 
+const getSuggestions = async (searchTerm, limit = 10) => {
+  const normalizedSearch = normalizeToUppercase(searchTerm || "");
+
+  if (!normalizedSearch || normalizedSearch.length < 1) {
+    return [];
+  }
+
+  const numericSearch = Number(normalizedSearch);
+  const regexPattern = new RegExp(normalizedSearch, "i");
+
+  // Build filters for different search types
+  const filters = [
+    // Tray searches
+    { trayCode: regexPattern, stockType: "TRAY", status: "AVAILABLE" },
+    { trayName: regexPattern, stockType: "TRAY", status: "AVAILABLE" },
+    { category: regexPattern, stockType: "TRAY", status: "AVAILABLE" },
+    { categoryCode: regexPattern, stockType: "TRAY", status: "AVAILABLE" },
+    // Tag searches - only by numeric ID
+    ...(Number.isFinite(numericSearch) && !Number.isNaN(numericSearch)
+      ? [{ tagId: numericSearch, stockType: "TAG", status: "AVAILABLE" }]
+      : []),
+  ];
+
+  const results = await Promise.all(
+    filters.map((filter) =>
+      Inventory.find({ ...filter, isDeleted: { $ne: true } })
+        .select("_id tagId trayCode trayName category categoryCode stockType metalType quantity weight status")
+        .limit(limit)
+        .lean()
+    )
+  );
+
+  // Flatten and deduplicate results
+  const uniqueResults = new Map();
+  results.flat().forEach((item) => {
+    const key = item._id.toString();
+    if (!uniqueResults.has(key)) {
+      uniqueResults.set(key, item);
+    }
+  });
+
+  // Format suggestions for display
+  return Array.from(uniqueResults.values()).map((item) => ({
+    inventoryId: item._id,
+    displayText:
+      item.stockType === "TAG" ? `Tag #${item.tagId}` : `${item.trayCode || item.trayName} (${item.category})`,
+    value: item.stockType === "TAG" ? item.tagId.toString() : item.trayCode || item.trayName,
+    type: item.stockType,
+    tagId: item.tagId,
+    trayCode: item.trayCode,
+    trayName: item.trayName,
+    category: item.category,
+    categoryCode: item.categoryCode,
+    metalType: item.metalType,
+    quantity: item.quantity,
+    weight: item.weight,
+  }));
+};
+
 module.exports = {
   createSaleTransaction,
   createStockTransaction,
   getInventoryLookup,
+  getSuggestions,
 };

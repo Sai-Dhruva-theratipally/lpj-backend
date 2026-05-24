@@ -13,8 +13,8 @@ const buildDocumentPayload = (body, file, cloudinaryUpload) => {
   }
 
   return {
-    title: body.title.trim(),
-    description: body.description?.trim() || "",
+    title: body.title.trim().toUpperCase(),
+    description: (body.description?.trim() || "").toUpperCase(),
     fileType,
     cloudinaryUrl: cloudinaryUpload.secure_url,
     cloudinaryPublicId: cloudinaryUpload.public_id,
@@ -50,14 +50,14 @@ const getDocuments = asyncHandler(async (req, res) => {
 });
 
 const searchDocuments = asyncHandler(async (req, res) => {
-  const search = String(req.query.q || "").trim();
+  const search = String(req.query.q || "").trim().toUpperCase();
 
   if (!search) {
     return sendSuccess(res, 200, "Documents fetched successfully", []);
   }
 
   const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const searchRegex = new RegExp(escapedSearch, "i");
+  const searchRegex = new RegExp(escapedSearch);
   const documents = await Document.find({
     $or: [{ title: searchRegex }, { description: searchRegex }],
   }).sort({ uploadedAt: -1 });

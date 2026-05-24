@@ -55,7 +55,7 @@ const cleanFilters = (query = {}) => ({
 });
 
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const textRegex = (value) => new RegExp(escapeRegex(value), "i");
+const textRegex = (value) => new RegExp(escapeRegex(String(value).trim().toUpperCase()));
 
 const round = (value) => Number((Number(value || 0)).toFixed(3));
 

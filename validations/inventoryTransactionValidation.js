@@ -35,7 +35,7 @@ const stockTransactionValidation = [
   body("sellerName").trim().notEmpty().withMessage("Seller name is required"),
   body("date").isISO8601().withMessage("Date is required and must be in ISO8601 format"),
   body("items").isArray({ min: 1, max: 200 }).withMessage("At least one stock item is required"),
-  body("items.*.metalType").isIn(["GOLD", "SILVER"]).withMessage("Metal type is required"),
+  body("items.*.metalType").isIn(["GOLD", "SILVER", "OTHERS"]).withMessage("Metal type is required"),
   body("items.*.stockType").isIn(["TAG", "TRAY"]).withMessage("Invalid inventory type"),
   body("items.*").custom((item) => {
     if (!item.categoryInput && !item.category && !item.categoryCode) {

@@ -17,8 +17,15 @@ const lookupInventory = asyncHandler(async (req, res) => {
   return sendSuccess(res, 200, "Inventory item fetched successfully", inventory);
 });
 
+const getSuggestions = asyncHandler(async (req, res) => {
+  const { search, limit } = req.query;
+  const suggestions = await inventoryTransactionService.getSuggestions(search, parseInt(limit) || 10);
+  return sendSuccess(res, 200, "Suggestions fetched successfully", suggestions);
+});
+
 module.exports = {
   createSaleTransaction,
   createStockTransaction,
   lookupInventory,
+  getSuggestions,
 };

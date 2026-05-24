@@ -12,6 +12,7 @@ const router = express.Router();
 router.use(protect);
 
 router.get("/lookup/:identifier", lookupValidation, inventoryTransactionController.lookupInventory);
+router.get("/suggestions", inventoryTransactionController.getSuggestions);
 router.post("/stock-transactions", stockTransactionValidation, inventoryTransactionController.createStockTransaction);
 router.post("/sale-transactions", saleTransactionValidation, inventoryTransactionController.createSaleTransaction);
 

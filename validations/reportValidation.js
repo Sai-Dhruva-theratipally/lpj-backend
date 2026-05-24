@@ -20,7 +20,7 @@ const validateRequest = (req, res, next) => {
 const commonReportValidation = [
   query("fromDate").optional().isISO8601().withMessage("From date must be valid"),
   query("toDate").optional().isISO8601().withMessage("To date must be valid"),
-  query("metalType").optional().isIn(["GOLD", "SILVER"]).withMessage("Invalid metal type"),
+  query("metalType").optional().isIn(["GOLD", "SILVER", "OTHERS"]).withMessage("Invalid metal type"),
   query("stockType").optional().isIn(["TAG", "TRAY"]).withMessage("Invalid stock type"),
   query("category").optional().trim(),
   query("seller").optional().trim(),

@@ -12,6 +12,8 @@ const inventorySchema = new mongoose.Schema(
     category: {
       type: String,
       trim: true,
+      uppercase: true,
+      index: true,
     },
     categoryCode: {
       type: String,
@@ -21,7 +23,7 @@ const inventorySchema = new mongoose.Schema(
     },
     metalType: {
       type: String,
-      enum: ["GOLD", "SILVER"],
+      enum: ["GOLD", "SILVER", "OTHERS"],
       trim: true,
       uppercase: true,
     },
@@ -58,6 +60,7 @@ const inventorySchema = new mongoose.Schema(
     purity: {
       type: String,
       trim: true,
+      uppercase: true,
     },
     makingCharges: {
       type: Number,
@@ -80,6 +83,7 @@ const inventorySchema = new mongoose.Schema(
     sellerName: {
       type: String,
       trim: true,
+      uppercase: true,
     },
     purchaseDate: {
       type: Date,
@@ -103,18 +107,14 @@ const inventorySchema = new mongoose.Schema(
     trayName: {
       type: String,
       trim: true,
-    },
-    trayNameKey: {
-      type: String,
-      trim: true,
-      lowercase: true,
+      uppercase: true,
       sparse: true,
       unique: true,
-      select: false,
     },
     description: {
       type: String,
       trim: true,
+      uppercase: true,
       default: "",
     },
     quantity: {
@@ -139,6 +139,7 @@ const inventorySchema = new mongoose.Schema(
         sellerName: {
           type: String,
           trim: true,
+          uppercase: true,
           required: true,
         },
         quantity: {
@@ -166,22 +167,26 @@ const inventorySchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    toJSON: {
-      transform(doc, ret) {
-        delete ret.trayNameKey;
-        return ret;
-      },
-    },
-    toObject: {
-      transform(doc, ret) {
-        delete ret.trayNameKey;
-        return ret;
-      },
-    },
   }
 );
 
 inventorySchema.pre("validate", function validateStockShape() {
+  if (this.category) {
+    this.category = this.category.trim().toUpperCase();
+  }
+  if (this.sellerName) {
+    this.sellerName = this.sellerName.trim().toUpperCase();
+  }
+  if (this.trayName) {
+    this.trayName = this.trayName.trim().toUpperCase();
+  }
+  if (this.description) {
+    this.description = this.description.trim().toUpperCase();
+  }
+  if (this.purity) {
+    this.purity = this.purity.trim().toUpperCase();
+  }
+
   if (this.stockType === "TAG") {
     if (!this.tagId) {
       this.invalidate("tagId", "12 digit tag code is required for tag inventory");
@@ -233,8 +238,6 @@ inventorySchema.pre("validate", function validateStockShape() {
 
     if (!this.trayName) {
       this.invalidate("trayName", "Tray name is required for tray inventory");
-    } else {
-      this.trayNameKey = this.trayName.trim().toLowerCase();
     }
 
     if (this.quantity === undefined || this.quantity === null) {
@@ -271,6 +274,6 @@ inventorySchema.index({ stockType: 1, sellerName: 1 });
 inventorySchema.index({ stockType: 1, status: 1 });
 inventorySchema.index({ stockType: 1, purchaseDate: 1 });
 inventorySchema.index({ trayCode: 1, stockType: 1 });
-inventorySchema.index({ trayNameKey: 1, stockType: 1 });
+inventorySchema.index({ trayName: 1, stockType: 1 });
 
 module.exports = mongoose.model("Inventory", inventorySchema);

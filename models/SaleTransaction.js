@@ -43,7 +43,7 @@ const saleTransactionItemSchema = new mongoose.Schema(
     },
     metalType: {
       type: String,
-      enum: ["GOLD", "SILVER"],
+      enum: ["GOLD", "SILVER", "OTHERS"],
       required: true,
       index: true,
     },

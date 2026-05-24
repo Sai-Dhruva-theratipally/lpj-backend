@@ -6,14 +6,9 @@ const sellerSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-    },
-    nameKey: {
-      type: String,
-      required: true,
-      trim: true,
-      lowercase: true,
+      uppercase: true,
       unique: true,
-      select: false,
+      index: true,
     },
   },
   {
@@ -21,9 +16,9 @@ const sellerSchema = new mongoose.Schema(
   }
 );
 
-sellerSchema.pre("validate", function setNameKey() {
+sellerSchema.pre("validate", function normalizeName() {
   if (this.name) {
-    this.nameKey = this.name.trim().toLowerCase();
+    this.name = this.name.trim().toUpperCase();
   }
 });
 

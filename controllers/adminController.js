@@ -12,4 +12,9 @@ const resetStock = asyncHandler(async (req, res) => {
   return sendSuccess(res, 200, "Stock reset successfully", result);
 });
 
-module.exports = { resetDatabase, resetStock };
+const changePassword = asyncHandler(async (req, res) => {
+  const result = await adminService.changePassword(req.admin._id, req.body.currentPassword, req.body.newPassword);
+  return sendSuccess(res, 200, "Password changed successfully", result);
+});
+
+module.exports = { resetDatabase, resetStock, changePassword };

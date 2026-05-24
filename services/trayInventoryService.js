@@ -2,8 +2,7 @@ const Inventory = require("../models/Inventory");
 const categoryService = require("./categoryService");
 const sellerService = require("./sellerService");
 
-const normalizeCode = (value) => value.trim().toUpperCase();
-const normalizeNameKey = (value) => value.trim().toLowerCase();
+const normalizeToUppercase = (value) => value.trim().toUpperCase();
 const normalizeDecimal = (value, fallback = 0) => {
   const number = Number(value ?? fallback);
   return Number.isFinite(number) ? Number(number.toFixed(3)) : fallback;
@@ -19,27 +18,28 @@ const buildTrayFilters = (query) => {
   }
 
   if (query.category) {
-    filters.category = new RegExp(query.category, "i");
+    filters.category = new RegExp(normalizeToUppercase(query.category));
   }
 
   if (query.metalType) {
-    filters.metalType = new RegExp(query.metalType, "i");
+    filters.metalType = new RegExp(normalizeToUppercase(query.metalType));
   }
 
   if (query.trayCode) {
-    filters.trayCode = normalizeCode(query.trayCode);
+    filters.trayCode = normalizeToUppercase(query.trayCode);
   }
 
   if (query.trayName) {
-    filters.trayNameKey = normalizeNameKey(query.trayName);
+    filters.trayName = normalizeToUppercase(query.trayName);
   }
 
   if (query.search) {
+    const searchUpper = normalizeToUppercase(query.search);
     filters.$or = [
-      { trayCode: new RegExp(query.search, "i") },
-      { trayName: new RegExp(query.search, "i") },
-      { category: new RegExp(query.search, "i") },
-      { metalType: new RegExp(query.search, "i") },
+      { trayCode: new RegExp(searchUpper) },
+      { trayName: new RegExp(searchUpper) },
+      { category: new RegExp(searchUpper) },
+      { metalType: new RegExp(searchUpper) },
     ];
   }
 
@@ -51,11 +51,10 @@ const calculateAverageWeight = (quantity, totalWeight) => {
 };
 
 const createTray = async (payload) => {
-  const trayName = payload.trayName || payload.name;
-  const trayCode = payload.trayCode ? normalizeCode(payload.trayCode) : undefined;
-  const trayNameKey = normalizeNameKey(trayName);
+  const trayName = normalizeToUppercase(payload.trayName || payload.name);
+  const trayCode = payload.trayCode ? normalizeToUppercase(payload.trayCode) : undefined;
 
-  const duplicateChecks = [{ trayNameKey }];
+  const duplicateChecks = [{ trayName }];
 
   if (trayCode) {
     duplicateChecks.push({ trayCode });
@@ -84,8 +83,7 @@ const createTray = async (payload) => {
     stockType: "TRAY",
     trayCode,
     trayName,
-    trayNameKey,
-    category: category?.name || payload.category,
+    category: category?.name || normalizeToUppercase(payload.category || ""),
     categoryCode: category?.categoryCode || payload.categoryCode,
     metalType: payload.metalType,
     quantity: payload.quantity ?? 0,
@@ -93,7 +91,7 @@ const createTray = async (payload) => {
     grossWeight: normalizeDecimal(payload.totalWeight),
     stoneWeight: normalizeDecimal(payload.stoneWeight),
     purity: payload.purity,
-    description: payload.description || payload.desc,
+    description: normalizeToUppercase(payload.description || payload.desc || ""),
     status: payload.status || "AVAILABLE",
   });
 };
@@ -163,15 +161,15 @@ const getTrayForStockChange = async (payload) => {
   const identifier = payload.identifier || payload.trayCode || payload.code || payload.trayName || payload.name;
 
   if (identifier) {
-    const trimmedIdentifier = identifier.trim();
-    const isMongoId = /^[a-f\d]{24}$/i.test(trimmedIdentifier);
+    const normalizedIdentifier = normalizeToUppercase(identifier);
+    const isMongoId = /^[a-f\d]{24}$/i.test(normalizedIdentifier);
     const tray = isMongoId
-      ? await Inventory.findOne({ _id: trimmedIdentifier, stockType: "TRAY" })
+      ? await Inventory.findOne({ _id: normalizedIdentifier, stockType: "TRAY" })
       : await Inventory.findOne({
           stockType: "TRAY",
           $or: [
-            { trayCode: normalizeCode(trimmedIdentifier) },
-            { trayNameKey: normalizeNameKey(trimmedIdentifier) },
+            { trayCode: normalizedIdentifier },
+            { trayName: normalizedIdentifier },
           ],
         });
 
@@ -187,7 +185,7 @@ const getTrayForStockChange = async (payload) => {
   if (payload.trayName || payload.name) {
     const tray = await Inventory.findOne({
       stockType: "TRAY",
-      trayNameKey: normalizeNameKey(payload.trayName || payload.name),
+      trayName: normalizeToUppercase(payload.trayName || payload.name),
     });
 
     if (!tray) {
@@ -208,12 +206,11 @@ const updateTray = async (id, payload) => {
   const tray = await getTrayById(id);
 
   if (payload.trayName || payload.name) {
-    const trayName = payload.trayName || payload.name;
-    const trayNameKey = normalizeNameKey(trayName);
+    const trayName = normalizeToUppercase(payload.trayName || payload.name);
     const existingTray = await Inventory.findOne({
       _id: { $ne: tray._id },
       stockType: "TRAY",
-      trayNameKey,
+      trayName,
     });
 
     if (existingTray) {
@@ -223,7 +220,6 @@ const updateTray = async (id, payload) => {
     }
 
     tray.trayName = trayName;
-    tray.trayNameKey = trayNameKey;
   }
 
   const editableFields = ["category", "metalType", "purity", "status", "description"];
@@ -244,6 +240,8 @@ const updateTray = async (id, payload) => {
         tray[field] = category.name;
         tray.categoryCode = category.categoryCode;
         tray.metalType = category.metalType;
+      } else if (field === "description") {
+        tray[field] = normalizeToUppercase(payload[field]);
       } else {
         tray[field] = payload[field];
       }

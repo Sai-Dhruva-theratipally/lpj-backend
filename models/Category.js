@@ -6,31 +6,20 @@ const categorySchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-    },
-    nameKey: {
-      type: String,
-      required: true,
-      trim: true,
-      lowercase: true,
-      select: false,
+      uppercase: true,
+      index: true,
     },
     categoryCode: {
       type: String,
       required: true,
       trim: true,
       uppercase: true,
-    },
-    categoryCodeKey: {
-      type: String,
-      required: true,
-      trim: true,
-      uppercase: true,
       unique: true,
-      select: false,
+      index: true,
     },
     metalType: {
       type: String,
-      enum: ["GOLD", "SILVER"],
+      enum: ["GOLD", "SILVER", "OTHERS"],
       required: true,
       index: true,
     },
@@ -46,14 +35,13 @@ const categorySchema = new mongoose.Schema(
   }
 );
 
-categorySchema.pre("validate", function setNameKey() {
+categorySchema.pre("validate", function normalizeFields() {
   if (this.name) {
-    this.nameKey = this.name.trim().toLowerCase();
+    this.name = this.name.trim().toUpperCase();
   }
 
   if (this.categoryCode) {
     this.categoryCode = this.categoryCode.trim().toUpperCase();
-    this.categoryCodeKey = this.categoryCode;
   }
 
   if (this.metalType) {
@@ -61,8 +49,8 @@ categorySchema.pre("validate", function setNameKey() {
   }
 });
 
-categorySchema.index({ metalType: 1, nameKey: 1 }, { unique: true });
-categorySchema.index({ metalType: 1, categoryCodeKey: 1 });
+categorySchema.index({ metalType: 1, name: 1 }, { unique: true });
+categorySchema.index({ metalType: 1, categoryCode: 1 });
 categorySchema.index({ metalType: 1, stockTypes: 1 });
 
 module.exports = mongoose.model("Category", categorySchema);

@@ -66,4 +66,21 @@ const resetStock = async (adminId, password, stockType = "ALL") => {
   };
 };
 
-module.exports = { resetDatabase, resetStock };
+const changePassword = async (adminId, currentPassword, newPassword) => {
+  const admin = await Admin.findById(adminId).select("+password");
+
+  if (!admin || !(await admin.matchPassword(currentPassword))) {
+    const error = new Error("Current password is incorrect");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  admin.password = newPassword;
+  await admin.save();
+
+  return {
+    changed: true,
+  };
+};
+
+module.exports = { resetDatabase, resetStock, changePassword };

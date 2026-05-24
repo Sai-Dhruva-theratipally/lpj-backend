@@ -4,7 +4,7 @@ const categoryService = require("./categoryService");
 const sellerService = require("./sellerService");
 const { getNextTagCode } = require("../utils/tagCode");
 
-const normalizeSearchRegex = (value) => new RegExp(String(value).trim(), "i");
+const normalizeSearchRegex = (value) => new RegExp(String(value).trim().toUpperCase());
 const normalizeDecimal = (value, fallback = 0) => {
   const number = Number(value ?? fallback);
   return Number.isFinite(number) ? Number(number.toFixed(3)) : fallback;
@@ -40,7 +40,7 @@ const buildTagFilters = (query) => {
   }
 
   if (query.search) {
-    const search = String(query.search).trim();
+    const search = String(query.search).trim().toUpperCase();
     const searchFilters = [
       { category: normalizeSearchRegex(search) },
       { sellerName: normalizeSearchRegex(search) },
