@@ -1,0 +1,7 @@
+const TAG_CODE_START = 100000000000;
+const TAG_CODE_END = 999999999999;
+
+module.exports = {
+  TAG_CODE_END,
+  TAG_CODE_START,
+};
