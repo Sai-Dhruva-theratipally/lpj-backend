@@ -470,7 +470,7 @@ const searchBills = async (query = {}) => {
   }
 
   const bills = await SaleTransaction.find(match)
-    .select("saleId customerName date totalItems totalWeight totalReceivedWeight items receivedItems")
+    .select("saleId customerName date totalItems totalWeight totalReceivedWeight items receivedItems status")
     .sort({ date: -1 })
     .limit(100)
     .lean();
@@ -482,6 +482,7 @@ const searchBills = async (query = {}) => {
     soldItems: bill.totalItems || 0,
     totalWeight: Number((bill.totalWeight || 0).toFixed(3)),
     receivedWeight: Number((bill.totalReceivedWeight || 0).toFixed(3)),
+    status: bill.status || "ACTIVE",
   }));
 };
 
@@ -498,6 +499,7 @@ const getBillDetails = async (saleId) => {
     saleId: bill.saleId,
     customerName: bill.customerName,
     date: new Date(bill.date).toISOString().split("T")[0],
+    status: bill.status || "ACTIVE",
     soldItems: (bill.items || []).map((item, index) => {
       const identifier = item.tagId || item.trayCode;
       return {
@@ -629,6 +631,10 @@ const returnBillItems = async (payload) => {
   const activeReceivedItems = (bill.receivedItems || []).filter((item) => !item.isCancelled);
   bill.totalReceivedItems = activeReceivedItems.length;
   bill.totalReceivedWeight = Number(activeReceivedItems.reduce((sum, item) => sum + Number(item.weight || 0), 0).toFixed(3));
+
+  const hasReturnedItems = bill.items.some((item) => item.isReturned);
+  bill.status = activeItems.length === 0 ? "RETURNED" : hasReturnedItems ? "PARTIALLY_RETURNED" : "ACTIVE";
+  bill.returnedAt = hasReturnedItems ? new Date() : undefined;
 
   await bill.save();
 

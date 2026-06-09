@@ -304,7 +304,7 @@ const salesSummaryPipeline = (query = {}) => {
     ...transactionMatchStages(query, "sales"),
     {
       $group: {
-        _id: { label: salesGroupExpression(groupBy), metalType: "$items.metalType" },
+        _id: { label: salesGroupExpression(groupBy), metalType: "$items.metalType", status: "$status" },
         quantity: { $sum: "$items.quantity" },
         grossWeight: { $sum: "$items.weight" },
         stoneWeight: { $sum: "$items.stoneWeight" },
@@ -316,6 +316,7 @@ const salesSummaryPipeline = (query = {}) => {
         _id: 0,
         [label]: "$_id.label",
         metalType: "$_id.metalType",
+        status: { $ifNull: ["$_id.status", "ACTIVE"] },
         quantity: 1,
         grossWeight: { $round: ["$grossWeight", 3] },
         stoneWeight: { $round: ["$stoneWeight", 3] },
@@ -336,6 +337,13 @@ const salesDetailedPipeline = (query = {}) => [
       customer: "$customerName",
       stockType: "$items.stockType",
       tagNumber: { $ifNull: [{ $toString: "$items.tagId" }, "$items.trayCode"] },
+      status: {
+        $cond: [
+          { $ifNull: ["$items.isReturned", false] },
+          "RETURNED",
+          { $ifNull: ["$status", "ACTIVE"] },
+        ],
+      },
       metalType: "$items.metalType",
       category: "$items.category",
       categoryCode: "$items.categoryCode",

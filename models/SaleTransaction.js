@@ -144,7 +144,7 @@ const saleTransactionSchema = new mongoose.Schema(
     },
     totalItems: {
       type: Number,
-      min: 1,
+      min: 0,
       required: true,
     },
     totalWeight: {
@@ -165,6 +165,15 @@ const saleTransactionSchema = new mongoose.Schema(
       type: Number,
       min: 0,
       default: 0,
+    },
+    status: {
+      type: String,
+      enum: ["ACTIVE", "PARTIALLY_RETURNED", "RETURNED"],
+      default: "ACTIVE",
+      index: true,
+    },
+    returnedAt: {
+      type: Date,
     },
   },
   {
