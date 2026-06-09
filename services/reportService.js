@@ -209,6 +209,7 @@ const getStockSummaryRows = async (query = {}) => {
   const inwardRows = await SaleTransaction.aggregate([
     ...(Object.keys(inwardRootMatch(query)).length ? [{ $match: inwardRootMatch(query) }] : []),
     { $unwind: "$receivedItems" },
+    { $match: { "receivedItems.isCancelled": { $ne: true } } },
     ...(Object.keys(inwardItemMatch(query)).length ? [{ $match: inwardItemMatch(query) }] : []),
     {
       $group: {
@@ -262,6 +263,7 @@ const getStockDetailedRows = async (query = {}) => {
   const inwardRows = await SaleTransaction.aggregate([
     ...(Object.keys(inwardRootMatch(query)).length ? [{ $match: inwardRootMatch(query) }] : []),
     { $unwind: "$receivedItems" },
+    { $match: { "receivedItems.isCancelled": { $ne: true } } },
     ...(Object.keys(inwardItemMatch(query)).length ? [{ $match: inwardItemMatch(query) }] : []),
     {
       $project: {
@@ -389,6 +391,7 @@ const getStockInwardDetailedRows = async (query = {}) => {
   const customerRows = await SaleTransaction.aggregate([
     ...(Object.keys(inwardRootMatch(query)).length ? [{ $match: inwardRootMatch(query) }] : []),
     { $unwind: "$receivedItems" },
+    { $match: { "receivedItems.isCancelled": { $ne: true } } },
     ...(Object.keys(inwardItemMatch(query)).length ? [{ $match: inwardItemMatch(query) }] : []),
     {
       $project: {

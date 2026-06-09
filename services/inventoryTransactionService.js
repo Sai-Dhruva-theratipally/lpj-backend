@@ -495,6 +495,8 @@ const getBillDetails = async (saleId) => {
     throw error;
   }
 
+  const activeReceivedItems = (bill.receivedItems || []).filter((item) => !item.isCancelled);
+
   return {
     saleId: bill.saleId,
     customerName: bill.customerName,
@@ -530,7 +532,7 @@ const getBillDetails = async (saleId) => {
       soldItems: bill.totalItems || 0,
       soldWeight: Number((bill.totalWeight || 0).toFixed(3)),
       soldStoneWeight: Number((bill.totalStoneWeight || 0).toFixed(3)),
-      receivedItems: (bill.receivedItems || []).length,
+      receivedItems: activeReceivedItems.length,
       receivedWeight: Number((bill.totalReceivedWeight || 0).toFixed(3)),
     },
   };
@@ -609,7 +611,11 @@ const returnBillItems = async (payload) => {
         continue;
       }
 
-      // Mark received item as cancelled
+      if (bill.receivedItems[index].isCancelled) {
+        continue;
+      }
+
+      // Mark received item as cancelled so it is removed from active stock/inward totals.
       bill.receivedItems[index].isCancelled = true;
 
       cancelledItems.push({
