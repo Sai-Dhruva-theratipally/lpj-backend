@@ -4,17 +4,12 @@ const SaleTransaction = require("../models/SaleTransaction");
 const StockTransaction = require("../models/StockTransaction");
 
 const REPORT_TITLES = {
-  "daily-stock-addition": "Daily Stock Addition Report",
-  "seller-wise-stock": "Seller-wise Stock Report",
-  "metal-wise-stock": "Metal-wise Stock Report",
-  "category-wise-stock": "Category-wise Stock Report",
-  "tag-vs-tray-stock": "Tag vs Tray Stock Report",
-  "daily-sales": "Daily Sales Report",
-  "customer-wise-sales": "Customer-wise Sales Report",
-  "category-wise-sales": "Category-wise Sales Report",
-  "metal-wise-sales": "Gold vs Silver Sales Report",
-  "tag-vs-tray-sales": "Tag vs Tray Sales Report",
-  "monthly-sales-summary": "Monthly Sales Summary",
+  "stock-summary": "Stock Summary Report",
+  "stock-detailed": "Stock Detailed Report",
+  "sales-summary": "Sales Summary Report",
+  "sales-detailed": "Sales Detailed Report",
+  "stock-inward-summary": "Stock Inward Summary Report",
+  "stock-inward-detailed": "Stock Inward Detailed Report",
   "cancelled-sales": "Cancelled Sales Report",
   "current-inventory": "Current Inventory Report",
   "available-stock": "Available Stock Report",
@@ -23,8 +18,9 @@ const REPORT_TITLES = {
 };
 
 const DEFAULT_REPORT_TYPE = {
-  stock: "daily-stock-addition",
-  sales: "daily-sales",
+  stock: "stock-summary",
+  sales: "sales-summary",
+  stockInward: "stock-inward-summary",
   inventory: "current-inventory",
 };
 
@@ -50,7 +46,9 @@ const cleanFilters = (query = {}) => ({
   category: query.category || "",
   seller: query.seller || "",
   customer: query.customer || "",
+  source: query.source || "",
   stockType: query.stockType || "",
+  groupBy: query.groupBy || "",
   reportType: query.reportType || "",
 });
 
@@ -58,10 +56,24 @@ const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$
 const textRegex = (value) => new RegExp(escapeRegex(String(value).trim().toUpperCase()));
 
 const round = (value) => Number((Number(value || 0)).toFixed(3));
+const metalRank = (metalType) => ({ GOLD: 0, SILVER: 1, OTHERS: 2 }[String(metalType || "").toUpperCase()] ?? 3);
+const sortReportRows = (rows = []) =>
+  [...rows].sort((first, second) => {
+    const firstName = String(first.category || first.item || first.source || first.customer || first.seller || first.date || "").toUpperCase();
+    const secondName = String(second.category || second.item || second.source || second.customer || second.seller || second.date || "").toUpperCase();
+    const firstId = String(first.tagNumber || first.tagId || first.identifier || first.categoryCode || first.stockType || "").toUpperCase();
+    const secondId = String(second.tagNumber || second.tagId || second.identifier || second.categoryCode || second.stockType || "").toUpperCase();
+
+    return (
+      metalRank(first.metalType) - metalRank(second.metalType) ||
+      firstName.localeCompare(secondName) ||
+      firstId.localeCompare(secondId, undefined, { numeric: true })
+    );
+  });
 
 const totalsFromRows = (rows) => ({
-  quantity: rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0),
-  grossWeight: round(rows.reduce((sum, row) => sum + Number(row.grossWeight || 0), 0)),
+  quantity: rows.reduce((sum, row) => sum + Number(row.quantity || row.pieces || 0), 0),
+  grossWeight: round(rows.reduce((sum, row) => sum + Number(row.grossWeight ?? row.weight ?? 0), 0)),
   stoneWeight: round(rows.reduce((sum, row) => sum + Number(row.stoneWeight || 0), 0)),
 });
 
@@ -107,42 +119,365 @@ const groupTransactionBy = (field, labelField = "label") => [
   { $sort: { [labelField]: 1 } },
 ];
 
+const inventoryMatch = (query = {}) => {
+  const match = { isDeleted: { $ne: true } };
+  const dateRange = toDateRange(query);
+
+  if (dateRange) match.purchaseDate = dateRange;
+  if (query.metalType) match.metalType = query.metalType;
+  if (query.category) match.category = textRegex(query.category);
+  if (query.seller) match.sellerName = textRegex(query.seller);
+  if (query.stockType) match.stockType = query.stockType;
+
+  return match;
+};
+
+const inwardRootMatch = (query = {}) => {
+  const match = {};
+  const dateRange = toDateRange(query);
+
+  if (dateRange) match.date = dateRange;
+  if (query.customer || query.source) match.customerName = textRegex(query.customer || query.source);
+
+  return match;
+};
+
+const stockInwardSellerRootMatch = (query = {}) => {
+  const match = {};
+  const dateRange = toDateRange(query);
+
+  if (dateRange) match.date = dateRange;
+  if (query.seller || query.source) match.sellerName = textRegex(query.seller || query.source);
+
+  return match;
+};
+
+const stockInwardSellerItemMatch = (query = {}) => {
+  const match = {};
+
+  if (query.metalType) match["items.metalType"] = query.metalType;
+  if (query.category) match["items.category"] = textRegex(query.category);
+  if (query.stockType && ["TAG", "TRAY"].includes(query.stockType)) match["items.stockType"] = query.stockType;
+  if (query.stockType && ["RAW_METAL", "OLD_ORNAMENT"].includes(query.stockType)) match.__skipSellerItems = true;
+
+  return match;
+};
+
+const inwardItemMatch = (query = {}) => {
+  const match = {};
+
+  if (query.metalType) match["receivedItems.metalType"] = query.metalType;
+  if (query.category) match["receivedItems.category"] = textRegex(query.category);
+  if (query.stockType) match["receivedItems.itemType"] = query.stockType;
+
+  return match;
+};
+
+const getStockSummaryRows = async (query = {}) => {
+  const inventoryRows = await Inventory.aggregate([
+    { $match: inventoryMatch(query) },
+    {
+      $group: {
+        _id: {
+          metalType: "$metalType",
+          stockType: "$stockType",
+          category: "$category",
+          categoryCode: "$categoryCode",
+        },
+        pieces: {
+          $sum: {
+            $cond: [{ $eq: ["$stockType", "TAG"] }, { $ifNull: ["$pieces", 1] }, { $ifNull: ["$quantity", 0] }],
+          },
+        },
+        weight: { $sum: { $ifNull: ["$grossWeight", "$weight"] } },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        metalType: "$_id.metalType",
+        tagNumber: { $cond: [{ $eq: ["$_id.stockType", "TAG"] }, "MULTIPLE", "-"] },
+        stockType: "$_id.stockType",
+        category: "$_id.category",
+        categoryCode: "$_id.categoryCode",
+        pieces: 1,
+        weight: { $round: ["$weight", 3] },
+      },
+    },
+  ]);
+
+  const inwardRows = await SaleTransaction.aggregate([
+    ...(Object.keys(inwardRootMatch(query)).length ? [{ $match: inwardRootMatch(query) }] : []),
+    { $unwind: "$receivedItems" },
+    ...(Object.keys(inwardItemMatch(query)).length ? [{ $match: inwardItemMatch(query) }] : []),
+    {
+      $group: {
+        _id: {
+          metalType: "$receivedItems.metalType",
+          stockType: "$receivedItems.itemType",
+          category: "$receivedItems.category",
+          purity: "$receivedItems.purity",
+        },
+        pieces: { $sum: 1 },
+        weight: { $sum: "$receivedItems.weight" },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        metalType: "$_id.metalType",
+        tagNumber: "-",
+        stockType: "$_id.stockType",
+        category: "$_id.category",
+        categoryCode: "$_id.purity",
+        pieces: 1,
+        weight: { $round: ["$weight", 3] },
+      },
+    },
+  ]);
+
+  return sortReportRows([...inventoryRows, ...inwardRows]);
+};
+
+const getStockDetailedRows = async (query = {}) => {
+  const inventoryRows = await Inventory.aggregate([
+    { $match: inventoryMatch(query) },
+    {
+      $project: {
+        _id: 0,
+        date: { $dateToString: { format: "%Y-%m-%d", date: "$purchaseDate" } },
+        metalType: 1,
+        tagNumber: { $cond: [{ $eq: ["$stockType", "TAG"] }, { $toString: "$tagId" }, "-"] },
+        stockType: 1,
+        category: 1,
+        categoryCode: 1,
+        pieces: { $cond: [{ $eq: ["$stockType", "TAG"] }, { $ifNull: ["$pieces", 1] }, { $ifNull: ["$quantity", 0] }] },
+        weight: { $round: [{ $ifNull: ["$grossWeight", "$weight"] }, 3] },
+        seller: "$sellerName",
+        status: 1,
+      },
+    },
+  ]);
+
+  const inwardRows = await SaleTransaction.aggregate([
+    ...(Object.keys(inwardRootMatch(query)).length ? [{ $match: inwardRootMatch(query) }] : []),
+    { $unwind: "$receivedItems" },
+    ...(Object.keys(inwardItemMatch(query)).length ? [{ $match: inwardItemMatch(query) }] : []),
+    {
+      $project: {
+        _id: 0,
+        date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+        saleId: 1,
+        customer: "$customerName",
+        metalType: "$receivedItems.metalType",
+        tagNumber: "-",
+        stockType: "$receivedItems.itemType",
+        category: "$receivedItems.category",
+        categoryCode: "$receivedItems.purity",
+        pieces: { $literal: 1 },
+        weight: { $round: ["$receivedItems.weight", 3] },
+        status: { $literal: "INWARD" },
+      },
+    },
+  ]);
+
+  return sortReportRows([...inventoryRows, ...inwardRows]);
+};
+
+const salesGroupExpression = (groupBy) => {
+  if (groupBy === "customer") return "$customerName";
+  if (groupBy === "item") return "$items.category";
+  return { $dateToString: { format: "%Y-%m-%d", date: "$date" } };
+};
+
+const salesGroupLabel = (groupBy) => {
+  if (groupBy === "customer") return "customer";
+  if (groupBy === "item") return "item";
+  return "date";
+};
+
+const salesSummaryPipeline = (query = {}) => {
+  const groupBy = query.groupBy || "date";
+  const label = salesGroupLabel(groupBy);
+
+  return [
+    ...transactionMatchStages(query, "sales"),
+    {
+      $group: {
+        _id: { label: salesGroupExpression(groupBy), metalType: "$items.metalType" },
+        quantity: { $sum: "$items.quantity" },
+        grossWeight: { $sum: "$items.weight" },
+        stoneWeight: { $sum: "$items.stoneWeight" },
+        transactionCount: { $addToSet: "$_id" },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        [label]: "$_id.label",
+        metalType: "$_id.metalType",
+        quantity: 1,
+        grossWeight: { $round: ["$grossWeight", 3] },
+        stoneWeight: { $round: ["$stoneWeight", 3] },
+        transactionCount: { $size: "$transactionCount" },
+      },
+    },
+    { $sort: { [label]: 1 } },
+  ];
+};
+
+const salesDetailedPipeline = (query = {}) => [
+  ...transactionMatchStages(query, "sales"),
+  {
+    $project: {
+      _id: 0,
+      date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+      saleId: 1,
+      customer: "$customerName",
+      stockType: "$items.stockType",
+      tagNumber: { $ifNull: [{ $toString: "$items.tagId" }, "$items.trayCode"] },
+      metalType: "$items.metalType",
+      category: "$items.category",
+      categoryCode: "$items.categoryCode",
+      pieces: "$items.quantity",
+      weight: { $round: ["$items.weight", 3] },
+      stoneWeight: { $round: ["$items.stoneWeight", 3] },
+    },
+  },
+  { $sort: { customer: 1, date: 1, category: 1 } },
+];
+
+const getStockInwardDetailedRows = async (query = {}) => {
+  const sellerItemMatch = stockInwardSellerItemMatch(query);
+  const skipSellerItems = sellerItemMatch.__skipSellerItems;
+  delete sellerItemMatch.__skipSellerItems;
+
+  const sellerRows = skipSellerItems
+    ? []
+    : await StockTransaction.aggregate([
+        ...(Object.keys(stockInwardSellerRootMatch(query)).length ? [{ $match: stockInwardSellerRootMatch(query) }] : []),
+        { $unwind: "$items" },
+        ...(Object.keys(sellerItemMatch).length ? [{ $match: sellerItemMatch }] : []),
+        {
+          $project: {
+            _id: 0,
+            date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+            transactionId: 1,
+            sourceType: { $literal: "SELLER" },
+            source: "$sellerName",
+            seller: "$sellerName",
+            stockType: "$items.stockType",
+            tagNumber: { $ifNull: ["$items.tagId", "$items.trayCode"] },
+            metalType: "$items.metalType",
+            category: "$items.category",
+            categoryCode: "$items.categoryCode",
+            pieces: "$items.quantity",
+            weight: { $round: ["$items.weight", 3] },
+            stoneWeight: { $round: ["$items.stoneWeight", 3] },
+          },
+        },
+      ]);
+
+  const customerRows = await SaleTransaction.aggregate([
+    ...(Object.keys(inwardRootMatch(query)).length ? [{ $match: inwardRootMatch(query) }] : []),
+    { $unwind: "$receivedItems" },
+    ...(Object.keys(inwardItemMatch(query)).length ? [{ $match: inwardItemMatch(query) }] : []),
+    {
+      $project: {
+        _id: 0,
+        date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+        saleId: 1,
+        sourceType: { $literal: "CUSTOMER" },
+        source: "$customerName",
+        seller: { $literal: "CUSTOMER RETURNS" },
+        stockType: "$receivedItems.itemType",
+        metalType: "$receivedItems.metalType",
+        category: "$receivedItems.category",
+        pieces: { $literal: 1 },
+        weight: { $round: ["$receivedItems.weight", 3] },
+        purity: "$receivedItems.purity",
+      },
+    },
+  ]);
+
+  return sortReportRows([...sellerRows, ...customerRows]);
+};
+
+const getStockInwardSummaryRows = async (query = {}) => {
+  const rows = await getStockInwardDetailedRows(query);
+  const groupBy = query.groupBy || "seller-date";
+  const groups = new Map();
+
+  rows.forEach((row) => {
+    let key;
+    let groupObj;
+
+    if (groupBy === "seller-date") {
+      const seller = row.sourceType === "SELLER" ? row.source : "CUSTOMER RETURNS";
+      const date = row.date;
+      key = [seller || "-", date || "-", row.metalType || "-", row.stockType || "-"].join("|");
+      groupObj = {
+        seller: seller,
+        date: date,
+        metalType: row.metalType,
+        stockType: row.stockType,
+        pieces: 0,
+        weight: 0,
+        stoneWeight: 0,
+        transactionCount: 0,
+      };
+    } else if (groupBy === "source") {
+      const label = row.source;
+      key = [label || "-", row.metalType || "-", row.stockType || "-"].join("|");
+      groupObj = {
+        source: label,
+        metalType: row.metalType,
+        stockType: row.stockType,
+        pieces: 0,
+        weight: 0,
+        stoneWeight: 0,
+        transactionCount: 0,
+      };
+    } else if (groupBy === "item") {
+      const label = row.category;
+      key = [label || "-", row.metalType || "-", row.stockType || "-"].join("|");
+      groupObj = {
+        item: label,
+        metalType: row.metalType,
+        stockType: row.stockType,
+        pieces: 0,
+        weight: 0,
+        stoneWeight: 0,
+        transactionCount: 0,
+      };
+    } else {
+      const label = row.date;
+      key = [label || "-", row.metalType || "-", row.stockType || "-"].join("|");
+      groupObj = {
+        date: label,
+        metalType: row.metalType,
+        stockType: row.stockType,
+        pieces: 0,
+        weight: 0,
+        stoneWeight: 0,
+        transactionCount: 0,
+      };
+    }
+
+    const current = groups.get(key) || groupObj;
+    current.pieces += Number(row.pieces || 0);
+    current.weight = round(current.weight + Number(row.weight || 0));
+    current.stoneWeight = round(current.stoneWeight + Number(row.stoneWeight || 0));
+    current.transactionCount += 1;
+    groups.set(key, current);
+  });
+
+  return sortReportRows(Array.from(groups.values()));
+};
+
 const getStockReport = async (query = {}) => {
   const reportType = query.reportType || DEFAULT_REPORT_TYPE.stock;
-  const base = transactionMatchStages(query, "stock");
-  let pipeline;
-
-  if (reportType === "seller-wise-stock") {
-    pipeline = [...base, ...groupTransactionBy("$sellerName", "seller")];
-  } else if (reportType === "metal-wise-stock") {
-    pipeline = [...base, ...groupTransactionBy("$items.metalType", "metalType")];
-  } else if (reportType === "category-wise-stock") {
-    pipeline = [...base, ...groupTransactionBy("$items.category", "category")];
-  } else if (reportType === "tag-vs-tray-stock") {
-    pipeline = [...base, ...groupTransactionBy("$items.stockType", "stockType")];
-  } else {
-    pipeline = [
-      ...base,
-      {
-        $project: {
-          _id: 0,
-          date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
-          transactionId: 1,
-          seller: "$sellerName",
-          stockType: "$items.stockType",
-          metalType: "$items.metalType",
-          category: "$items.category",
-          categoryCode: "$items.categoryCode",
-          quantity: "$items.quantity",
-          grossWeight: { $round: ["$items.weight", 3] },
-          stoneWeight: { $round: ["$items.stoneWeight", 3] },
-        },
-      },
-      { $sort: { date: -1, transactionId: 1 } },
-    ];
-  }
-
-  const rows = await StockTransaction.aggregate(pipeline);
+  const rows = reportType === "stock-detailed" ? await getStockDetailedRows(query) : await getStockSummaryRows(query);
   return buildReportResponse("stock", reportType, query, rows);
 };
 
@@ -153,71 +488,15 @@ const getSalesReport = async (query = {}) => {
     return getCancelledSalesReport(query);
   }
 
-  const base = transactionMatchStages(query, "sales");
-  let pipeline;
-
-  if (reportType === "customer-wise-sales") {
-    pipeline = [...base, ...groupTransactionBy("$customerName", "customer")];
-  } else if (reportType === "category-wise-sales") {
-    pipeline = [...base, ...groupTransactionBy("$items.category", "category")];
-  } else if (reportType === "metal-wise-sales") {
-    pipeline = [...base, ...groupTransactionBy("$items.metalType", "metalType")];
-  } else if (reportType === "tag-vs-tray-sales") {
-    pipeline = [...base, ...groupTransactionBy("$items.stockType", "stockType")];
-  } else if (reportType === "monthly-sales-summary") {
-    pipeline = [
-      ...base,
-      {
-        $group: {
-          _id: { year: { $year: "$date" }, month: { $month: "$date" } },
-          quantity: { $sum: "$items.quantity" },
-          grossWeight: { $sum: "$items.weight" },
-          stoneWeight: { $sum: "$items.stoneWeight" },
-          transactions: { $addToSet: "$_id" },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          month: {
-            $concat: [
-              { $toString: "$_id.year" },
-              "-",
-              { $cond: [{ $lt: ["$_id.month", 10] }, { $concat: ["0", { $toString: "$_id.month" }] }, { $toString: "$_id.month" }] },
-            ],
-          },
-          quantity: 1,
-          grossWeight: { $round: ["$grossWeight", 3] },
-          stoneWeight: { $round: ["$stoneWeight", 3] },
-          transactionCount: { $size: "$transactions" },
-        },
-      },
-      { $sort: { month: -1 } },
-    ];
-  } else {
-    pipeline = [
-      ...base,
-      {
-        $project: {
-          _id: 0,
-          date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
-          saleId: 1,
-          customer: "$customerName",
-          stockType: "$items.stockType",
-          metalType: "$items.metalType",
-          category: "$items.category",
-          categoryCode: "$items.categoryCode",
-          quantity: "$items.quantity",
-          grossWeight: { $round: ["$items.weight", 3] },
-          stoneWeight: { $round: ["$items.stoneWeight", 3] },
-        },
-      },
-      { $sort: { date: -1, saleId: 1 } },
-    ];
-  }
-
+  const pipeline = reportType === "sales-detailed" ? salesDetailedPipeline(query) : salesSummaryPipeline(query);
   const rows = await SaleTransaction.aggregate(pipeline);
   return buildReportResponse("sales", reportType, query, rows);
+};
+
+const getStockInwardReport = async (query = {}) => {
+  const reportType = query.reportType || DEFAULT_REPORT_TYPE.stockInward;
+  const rows = reportType === "stock-inward-detailed" ? await getStockInwardDetailedRows(query) : await getStockInwardSummaryRows(query);
+  return buildReportResponse("stockInward", reportType, query, rows);
 };
 
 const getCancelledSalesReport = async (query = {}) => {
@@ -348,7 +627,7 @@ const buildReportResponse = (section, reportType, query, rows) => ({
   reportType,
   title: REPORT_TITLES[reportType] || REPORT_TITLES[DEFAULT_REPORT_TYPE[section]],
   filters: cleanFilters({ ...query, reportType }),
-  rows,
+  rows: sortReportRows(rows),
   totals: totalsFromRows(rows),
 });
 
@@ -356,6 +635,7 @@ module.exports = {
   getCustomerLookups,
   getInventoryReport,
   getSalesReport,
+  getStockInwardReport,
   getStockReport,
   REPORT_TITLES,
 };

@@ -39,6 +39,17 @@ const normalizeDecimal = (value, fallback = 0) => {
   return Number.isFinite(number) ? Number(number.toFixed(3)) : fallback;
 };
 
+const normalizeReceivedItems = (items = []) =>
+  items
+    .filter((item) => item && (item.itemType || item.metalType || item.category || item.weight || item.purity))
+    .map((item) => ({
+      itemType: normalizeToUppercase(item.itemType || ""),
+      metalType: normalizeToUppercase(item.metalType || ""),
+      category: normalizeToUppercase(item.category || ""),
+      weight: normalizeDecimal(item.weight),
+      purity: item.itemType === "OLD_ORNAMENT" ? normalizeToUppercase(item.purity || "") : "",
+    }));
+
 const findInventoryByIdentifier = async (identifier) => {
   const normalizedIdentifier = normalizeToUppercase(identifier || "");
 
@@ -52,6 +63,7 @@ const findInventoryByIdentifier = async (identifier) => {
   const isMongoId = /^[a-f\d]{24}$/i.test(normalizedIdentifier);
 
   const filters = [
+    { tagId: normalizedIdentifier, stockType: "TAG" },
     { trayCode: normalizedIdentifier, stockType: "TRAY" },
     { trayName: normalizedIdentifier, stockType: "TRAY" },
     { category: normalizedIdentifier, stockType: "TRAY" },
@@ -59,6 +71,7 @@ const findInventoryByIdentifier = async (identifier) => {
   ];
 
   if (!Number.isNaN(numericIdentifier)) {
+    filters.push({ tagId: String(numericIdentifier), stockType: "TAG" });
     filters.push({ tagId: numericIdentifier, stockType: "TAG" });
   }
 
@@ -185,7 +198,7 @@ const createTagsFromStockItem = async (item, seller, transactionDate, category) 
   const transactionItems = [];
 
   for (let index = 0; index < quantity; index += 1) {
-    const tagId = await getNextTagCode();
+    const tagId = await getNextTagCode(category.categoryCode);
     const tag = await Inventory.create({
       stockType: "TAG",
       tagId,
@@ -358,6 +371,8 @@ const createSaleTransaction = async (payload) => {
   const totalItems = saleItems.reduce((sum, item) => sum + Number(item.quantity), 0);
   const totalWeight = Number(saleItems.reduce((sum, item) => sum + Number(item.weight), 0).toFixed(3));
   const totalStoneWeight = Number(saleItems.reduce((sum, item) => sum + Number(item.stoneWeight || 0), 0).toFixed(3));
+  const receivedItems = normalizeReceivedItems(payload.receivedItems);
+  const totalReceivedWeight = Number(receivedItems.reduce((sum, item) => sum + Number(item.weight || 0), 0).toFixed(3));
 
   return SaleTransaction.create({
     saleId: await getNextSaleId(),
@@ -367,6 +382,8 @@ const createSaleTransaction = async (payload) => {
     totalItems,
     totalWeight,
     totalStoneWeight,
+    receivedItems,
+    totalReceivedWeight,
   });
 };
 
@@ -387,10 +404,10 @@ const getSuggestions = async (searchTerm, limit = 10) => {
     { trayName: regexPattern, stockType: "TRAY", status: "AVAILABLE" },
     { category: regexPattern, stockType: "TRAY", status: "AVAILABLE" },
     { categoryCode: regexPattern, stockType: "TRAY", status: "AVAILABLE" },
-    // Tag searches - only by numeric ID
+    // Tag searches support new category-prefixed codes and legacy numeric codes.
     ...(Number.isFinite(numericSearch) && !Number.isNaN(numericSearch)
-      ? [{ tagId: numericSearch, stockType: "TAG", status: "AVAILABLE" }]
-      : []),
+      ? [{ tagId: normalizedSearch, stockType: "TAG", status: "AVAILABLE" }, { tagId: numericSearch, stockType: "TAG", status: "AVAILABLE" }]
+      : [{ tagId: regexPattern, stockType: "TAG", status: "AVAILABLE" }]),
   ];
 
   const results = await Promise.all(
@@ -429,9 +446,214 @@ const getSuggestions = async (searchTerm, limit = 10) => {
   }));
 };
 
+const searchBills = async (query = {}) => {
+  const match = {};
+  const regexPattern = new RegExp(normalizeToUppercase(query.search || ""), "i");
+
+  if (query.search) {
+    match.$or = [
+      { saleId: regexPattern },
+      { customerName: regexPattern },
+      { "items.category": regexPattern },
+      { "receivedItems.category": regexPattern },
+    ];
+  }
+
+  if (query.fromDate || query.toDate) {
+    match.date = {};
+    if (query.fromDate) match.date.$gte = new Date(query.fromDate);
+    if (query.toDate) {
+      const end = new Date(query.toDate);
+      end.setHours(23, 59, 59, 999);
+      match.date.$lte = end;
+    }
+  }
+
+  const bills = await SaleTransaction.find(match)
+    .select("saleId customerName date totalItems totalWeight totalReceivedWeight items receivedItems")
+    .sort({ date: -1 })
+    .limit(100)
+    .lean();
+
+  return bills.map((bill) => ({
+    saleId: bill.saleId,
+    customer: bill.customerName,
+    date: new Date(bill.date).toISOString().split("T")[0],
+    soldItems: bill.totalItems || 0,
+    totalWeight: Number((bill.totalWeight || 0).toFixed(3)),
+    receivedWeight: Number((bill.totalReceivedWeight || 0).toFixed(3)),
+  }));
+};
+
+const getBillDetails = async (saleId) => {
+  const bill = await SaleTransaction.findOne({ saleId });
+
+  if (!bill) {
+    const error = new Error("Bill not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return {
+    saleId: bill.saleId,
+    customerName: bill.customerName,
+    date: new Date(bill.date).toISOString().split("T")[0],
+    soldItems: (bill.items || []).map((item, index) => {
+      const identifier = item.tagId || item.trayCode;
+      return {
+        index,
+        inventoryId: item.inventoryId,
+        stockType: item.stockType,
+        identifier: item.isReturned ? `${identifier} *` : identifier,
+        metalType: item.metalType,
+        category: item.category,
+        categoryCode: item.categoryCode,
+        quantity: item.quantity,
+        weight: Number(item.weight.toFixed(3)),
+        stoneWeight: Number((item.stoneWeight || 0).toFixed(3)),
+        seller: item.sellerName,
+        isReturned: item.isReturned || false,
+      };
+    }),
+    receivedItems: (bill.receivedItems || []).map((item, index) => ({
+      index,
+      itemType: item.isCancelled ? `${item.itemType} *` : item.itemType,
+      metalType: item.metalType,
+      category: item.category,
+      weight: Number(item.weight.toFixed(3)),
+      purity: item.purity || "",
+      isCancelled: item.isCancelled || false,
+    })),
+    totals: {
+      soldItems: bill.totalItems || 0,
+      soldWeight: Number((bill.totalWeight || 0).toFixed(3)),
+      soldStoneWeight: Number((bill.totalStoneWeight || 0).toFixed(3)),
+      receivedItems: (bill.receivedItems || []).length,
+      receivedWeight: Number((bill.totalReceivedWeight || 0).toFixed(3)),
+    },
+  };
+};
+
+const returnBillItems = async (payload) => {
+  const { saleId, itemIndicesToReturn, receivedItemIndicesToCancel } = payload;
+
+  if (!saleId || (!Array.isArray(itemIndicesToReturn) || itemIndicesToReturn.length === 0) && (!Array.isArray(receivedItemIndicesToCancel) || receivedItemIndicesToCancel.length === 0)) {
+    const error = new Error("saleId and at least itemIndicesToReturn or receivedItemIndicesToCancel array are required");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const bill = await SaleTransaction.findOne({ saleId });
+
+  if (!bill) {
+    const error = new Error("Bill not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const returnedItems = [];
+  const cancelledItems = [];
+
+  // Handle sold items returns
+  if (Array.isArray(itemIndicesToReturn) && itemIndicesToReturn.length > 0) {
+    for (const index of itemIndicesToReturn) {
+      if (index < 0 || index >= bill.items.length) {
+        continue;
+      }
+
+      const item = bill.items[index];
+
+      if (!item || !item.inventoryId) {
+        continue;
+      }
+
+      const inventory = await Inventory.findById(item.inventoryId);
+
+      if (!inventory) {
+        continue;
+      }
+
+      if (item.stockType === "TAG") {
+        // Reset tag status from SOLD to AVAILABLE
+        inventory.status = "AVAILABLE";
+        inventory.saleDate = null;
+        await inventory.save();
+      } else {
+        // Return tray quantity and weight
+        inventory.quantity += Number(item.quantity || 0);
+        inventory.totalWeight = Number((Number(inventory.totalWeight) + Number(item.weight)).toFixed(3));
+        inventory.grossWeight = inventory.totalWeight;
+        inventory.stoneWeight = Number((Number(inventory.stoneWeight || 0) + Number(item.stoneWeight || 0)).toFixed(3));
+        inventory.saleDate = null;
+        await inventory.save();
+      }
+
+      // Mark item as returned instead of deleting
+      bill.items[index].isReturned = true;
+
+      returnedItems.push({
+        stockType: item.stockType,
+        identifier: item.tagId || item.trayCode,
+        quantity: item.quantity,
+        weight: item.weight,
+      });
+    }
+  }
+
+  // Handle received items cancellation
+  if (Array.isArray(receivedItemIndicesToCancel) && receivedItemIndicesToCancel.length > 0) {
+    for (const index of receivedItemIndicesToCancel) {
+      if (index < 0 || index >= (bill.receivedItems || []).length) {
+        continue;
+      }
+
+      // Mark received item as cancelled
+      bill.receivedItems[index].isCancelled = true;
+
+      cancelledItems.push({
+        itemType: bill.receivedItems[index].itemType,
+        metalType: bill.receivedItems[index].metalType,
+        category: bill.receivedItems[index].category,
+        weight: bill.receivedItems[index].weight,
+      });
+    }
+  }
+
+  // Recalculate totals excluding returned items
+  const activeItems = bill.items.filter((item) => !item.isReturned);
+  bill.totalItems = activeItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  bill.totalWeight = Number(activeItems.reduce((sum, item) => sum + Number(item.weight || 0), 0).toFixed(3));
+  bill.totalStoneWeight = Number(activeItems.reduce((sum, item) => sum + Number(item.stoneWeight || 0), 0).toFixed(3));
+
+  // Recalculate received totals excluding cancelled items
+  const activeReceivedItems = (bill.receivedItems || []).filter((item) => !item.isCancelled);
+  bill.totalReceivedItems = activeReceivedItems.length;
+  bill.totalReceivedWeight = Number(activeReceivedItems.reduce((sum, item) => sum + Number(item.weight || 0), 0).toFixed(3));
+
+  await bill.save();
+
+  const messages = [];
+  if (returnedItems.length > 0) {
+    messages.push(`${returnedItems.length} sold item(s) returned`);
+  }
+  if (cancelledItems.length > 0) {
+    messages.push(`${cancelledItems.length} received item(s) cancelled`);
+  }
+
+  return {
+    success: true,
+    message: messages.join(" and "),
+    returnedItems,
+    cancelledItems,
+  };
+};
+
 module.exports = {
   createSaleTransaction,
   createStockTransaction,
+  getBillDetails,
   getInventoryLookup,
   getSuggestions,
+  returnBillItems,
+  searchBills,
 };

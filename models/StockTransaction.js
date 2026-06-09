@@ -15,7 +15,9 @@ const stockTransactionItemSchema = new mongoose.Schema(
       index: true,
     },
     tagId: {
-      type: Number,
+      type: String,
+      trim: true,
+      uppercase: true,
       index: true,
     },
     trayCode: {

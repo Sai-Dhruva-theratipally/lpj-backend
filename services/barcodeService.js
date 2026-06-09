@@ -1,5 +1,3 @@
-const TAG_BARCODE_LENGTH = 12;
-
 const normalizeCode128Value = (value) => {
   const barcodeValue = String(value ?? "").trim();
 
@@ -21,8 +19,8 @@ const normalizeCode128Value = (value) => {
 const normalizeTagBarcodeValue = (tagId) => {
   const barcodeValue = normalizeCode128Value(tagId);
 
-  if (!/^\d{12}$/.test(barcodeValue)) {
-    const error = new Error(`Tag barcode must be a ${TAG_BARCODE_LENGTH} digit tag id`);
+  if (!/^[A-Z0-9]{6}\d{5}$/.test(barcodeValue) && !/^\d{12}$/.test(barcodeValue)) {
+    const error = new Error("Tag barcode must be 6 category characters followed by 5 digits");
     error.statusCode = 400;
     throw error;
   }

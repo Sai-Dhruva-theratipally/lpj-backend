@@ -13,6 +13,11 @@ const getSalesReport = asyncHandler(async (req, res) => {
   return sendSuccess(res, 200, "Sales report generated successfully", report);
 });
 
+const getSalesInwardReport = asyncHandler(async (req, res) => {
+  const report = await reportService.getStockInwardReport(req.query);
+  return sendSuccess(res, 200, "Sales inward report generated successfully", report);
+});
+
 const getInventoryReport = asyncHandler(async (req, res) => {
   const report = await reportService.getInventoryReport(req.query);
   return sendSuccess(res, 200, "Inventory report generated successfully", report);
@@ -33,6 +38,11 @@ const downloadSalesReportPdf = asyncHandler(async (req, res) => {
   return pdfService.streamReportPdf(res, report);
 });
 
+const downloadSalesInwardReportPdf = asyncHandler(async (req, res) => {
+  const report = await reportService.getStockInwardReport(req.query);
+  return pdfService.streamReportPdf(res, report);
+});
+
 const downloadInventoryReportPdf = asyncHandler(async (req, res) => {
   const report = await reportService.getInventoryReport(req.query);
   return pdfService.streamReportPdf(res, report);
@@ -40,10 +50,12 @@ const downloadInventoryReportPdf = asyncHandler(async (req, res) => {
 
 module.exports = {
   downloadInventoryReportPdf,
+  downloadSalesInwardReportPdf,
   downloadSalesReportPdf,
   downloadStockReportPdf,
   getCustomerLookups,
   getInventoryReport,
+  getSalesInwardReport,
   getSalesReport,
   getStockReport,
 };

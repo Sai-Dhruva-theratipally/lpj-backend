@@ -42,11 +42,14 @@ const buildTagFilters = (query) => {
   if (query.search) {
     const search = String(query.search).trim().toUpperCase();
     const searchFilters = [
+      { tagId: search },
+      { tagId: normalizeSearchRegex(search) },
       { category: normalizeSearchRegex(search) },
       { sellerName: normalizeSearchRegex(search) },
     ];
 
     if (!Number.isNaN(Number(search))) {
+      searchFilters.push({ tagId: String(Number(search)) });
       searchFilters.push({ tagId: Number(search) });
     }
 
@@ -63,7 +66,7 @@ const getTags = async (query) => {
   const filters = buildTagFilters(query);
 
   const [items, total] = await Promise.all([
-    Inventory.find(filters).sort({ tagId: -1 }).skip(skip).limit(limit),
+    Inventory.find(filters).sort({ metalType: 1, category: 1, tagId: 1 }).skip(skip).limit(limit),
     Inventory.countDocuments(filters),
   ]);
 
@@ -80,12 +83,21 @@ const getTags = async (query) => {
 
 const getTagById = async (id) => {
   const numericId = Number(id);
-  const query = Number.isNaN(numericId) ? { _id: id } : { tagId: numericId };
+  const normalizedId = String(id || "").trim().toUpperCase();
+  const filters = [{ tagId: normalizedId }];
+
+  if (/^[a-f\d]{24}$/i.test(normalizedId)) {
+    filters.push({ _id: normalizedId });
+  }
+
+  if (!Number.isNaN(numericId)) {
+    filters.push({ tagId: String(numericId) }, { tagId: numericId });
+  }
 
   const tag = await Inventory.findOne({
-    ...query,
     stockType: "TAG",
     isDeleted: false,
+    $or: filters,
   });
 
   if (!tag) {
@@ -110,7 +122,7 @@ const createTag = async (payload) => {
     existingCategory ||
     (await categoryService.findOrCreateCategory(payload.category, "TAG", payload.metalType, payload.categoryCode));
 
-  const tagId = await getNextTagCode();
+  const tagId = await getNextTagCode(category.categoryCode);
 
   return Inventory.create({
     stockType: "TAG",

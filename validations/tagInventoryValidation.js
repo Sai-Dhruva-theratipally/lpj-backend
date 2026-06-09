@@ -19,7 +19,7 @@ const validateRequest = (req, res, next) => {
 
 const tagIdParam = [
   param("id")
-    .custom((value) => /^\d+$/.test(value) || /^[a-f\d]{24}$/i.test(value))
+    .custom((value) => /^[A-Z0-9]{6}\d{5}$/i.test(value) || /^\d+$/.test(value) || /^[a-f\d]{24}$/i.test(value))
     .withMessage("Valid tag code is required"),
   validateRequest,
 ];
@@ -46,7 +46,7 @@ const createTagValidation = [
 
 const updateTagValidation = [
   param("id")
-    .custom((value) => /^\d+$/.test(value) || /^[a-f\d]{24}$/i.test(value))
+    .custom((value) => /^[A-Z0-9]{6}\d{5}$/i.test(value) || /^\d+$/.test(value) || /^[a-f\d]{24}$/i.test(value))
     .withMessage("Valid tag code is required"),
   body("tagId").not().exists().withMessage("Tag code cannot be changed"),
   body("id").not().exists().withMessage("Tag code cannot be changed"),
@@ -63,7 +63,7 @@ const updateTagValidation = [
 
 const sellTagValidation = [
   param("id")
-    .custom((value) => /^\d+$/.test(value) || /^[a-f\d]{24}$/i.test(value))
+    .custom((value) => /^[A-Z0-9]{6}\d{5}$/i.test(value) || /^\d+$/.test(value) || /^[a-f\d]{24}$/i.test(value))
     .withMessage("Valid tag code is required"),
   body("saleDate").optional().isISO8601().withMessage("Sale date must be valid"),
   body("note").optional().trim(),
@@ -72,7 +72,7 @@ const sellTagValidation = [
 
 const cancelSaleValidation = [
   param("id")
-    .custom((value) => /^\d+$/.test(value) || /^[a-f\d]{24}$/i.test(value))
+    .custom((value) => /^[A-Z0-9]{6}\d{5}$/i.test(value) || /^\d+$/.test(value) || /^[a-f\d]{24}$/i.test(value))
     .withMessage("Valid tag code is required"),
   body("reason").optional().trim(),
   validateRequest,

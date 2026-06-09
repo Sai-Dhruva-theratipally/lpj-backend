@@ -21,17 +21,18 @@ const commonReportValidation = [
   query("fromDate").optional().isISO8601().withMessage("From date must be valid"),
   query("toDate").optional().isISO8601().withMessage("To date must be valid"),
   query("metalType").optional().isIn(["GOLD", "SILVER", "OTHERS"]).withMessage("Invalid metal type"),
-  query("stockType").optional().isIn(["TAG", "TRAY"]).withMessage("Invalid stock type"),
+  query("stockType").optional().isIn(["TAG", "TRAY", "RAW_METAL", "OLD_ORNAMENT"]).withMessage("Invalid stock type"),
   query("category").optional().trim(),
   query("seller").optional().trim(),
   query("customer").optional().trim(),
+  query("groupBy").optional().isIn(["date", "customer", "item"]).withMessage("Invalid grouping"),
 ];
 
 const stockReportValidation = [
   ...commonReportValidation,
   query("reportType")
     .optional()
-    .isIn(["daily-stock-addition", "seller-wise-stock", "metal-wise-stock", "category-wise-stock", "tag-vs-tray-stock"])
+    .isIn(["stock-summary", "stock-detailed"])
     .withMessage("Invalid stock report type"),
   validateRequest,
 ];
@@ -41,15 +42,20 @@ const salesReportValidation = [
   query("reportType")
     .optional()
     .isIn([
-      "daily-sales",
-      "customer-wise-sales",
-      "category-wise-sales",
-      "metal-wise-sales",
-      "tag-vs-tray-sales",
-      "monthly-sales-summary",
+      "sales-summary",
+      "sales-detailed",
       "cancelled-sales",
     ])
     .withMessage("Invalid sales report type"),
+  validateRequest,
+];
+
+const salesInwardReportValidation = [
+  ...commonReportValidation,
+  query("reportType")
+    .optional()
+    .isIn(["sales-inward-summary", "sales-inward-detailed"])
+    .withMessage("Invalid sales inward report type"),
   validateRequest,
 ];
 
@@ -64,6 +70,7 @@ const inventoryReportValidation = [
 
 module.exports = {
   inventoryReportValidation,
+  salesInwardReportValidation,
   salesReportValidation,
   stockReportValidation,
 };

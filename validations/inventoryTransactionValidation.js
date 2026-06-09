@@ -78,6 +78,36 @@ const saleTransactionValidation = [
     .optional({ nullable: true })
     .isFloat({ min: 0 })
     .withMessage("Stone weight must be greater than or equal to 0"),
+  body("receivedItems").optional().isArray({ max: 100 }).withMessage("Received items must be a list"),
+  body("receivedItems.*.itemType")
+    .optional()
+    .isIn(["RAW_METAL", "OLD_ORNAMENT"])
+    .withMessage("Received item type must be raw metal or old ornament"),
+  body("receivedItems.*.metalType")
+    .optional()
+    .isIn(["GOLD", "SILVER"])
+    .withMessage("Received metal must be gold or silver"),
+  body("receivedItems.*.category").optional().trim().notEmpty().withMessage("Received category is required"),
+  body("receivedItems.*.weight")
+    .optional()
+    .isFloat({ gt: 0 })
+    .withMessage("Received weight must be greater than 0"),
+  body("receivedItems.*.purity").optional({ nullable: true }).trim(),
+  body("receivedItems.*").custom((item) => {
+    if (!item.itemType && !item.metalType && !item.category && !item.weight && !item.purity) {
+      return true;
+    }
+
+    if (!item.itemType || !item.metalType || !item.category || item.weight === undefined || item.weight === "") {
+      throw new Error("Received item type, metal, category, and weight are required");
+    }
+
+    if (item.itemType === "OLD_ORNAMENT" && !String(item.purity || "").trim()) {
+      throw new Error("Purity is required for old ornaments");
+    }
+
+    return true;
+  }),
   validateRequest,
 ];
 

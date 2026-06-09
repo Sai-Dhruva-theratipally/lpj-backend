@@ -29,14 +29,14 @@ router
   .get(
     query("search").optional().trim(),
     query("stockType").optional().isIn(["TAG", "TRAY"]).withMessage("Invalid stock type"),
-    query("metalType").optional().isIn(["GOLD", "SILVER"]).withMessage("Invalid metal type"),
+    query("metalType").optional().isIn(["GOLD", "SILVER", "OTHERS"]).withMessage("Invalid metal type"),
     validateRequest,
     getCategories
   )
   .post(
     body("name").trim().notEmpty().withMessage("Category name is required"),
     body("categoryCode").trim().notEmpty().withMessage("Category code is required"),
-    body("metalType").isIn(["GOLD", "SILVER"]).withMessage("Metal type is required"),
+    body("metalType").isIn(["GOLD", "SILVER", "OTHERS"]).withMessage("Metal type is required"),
     body("stockType").optional().isIn(["TAG", "TRAY"]).withMessage("Invalid stock type"),
     validateRequest,
     createCategory

@@ -9,6 +9,15 @@ const formatValue = (value) => {
 
 const buildColumns = (rows) => {
   const preferred = [
+    "metalType",
+    "category",
+    "item",
+    "tagNumber",
+    "tagId",
+    "identifier",
+    "stockType",
+    "pieces",
+    "weight",
     "date",
     "saleDate",
     "cancelledAt",
@@ -17,15 +26,12 @@ const buildColumns = (rows) => {
     "saleId",
     "seller",
     "customer",
-    "stockType",
-    "identifier",
-    "tagId",
-    "metalType",
-    "category",
     "categoryCode",
     "quantity",
     "grossWeight",
     "stoneWeight",
+    "purity",
+    "status",
     "transactionCount",
     "reason",
   ];

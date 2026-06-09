@@ -23,9 +23,27 @@ const getSuggestions = asyncHandler(async (req, res) => {
   return sendSuccess(res, 200, "Suggestions fetched successfully", suggestions);
 });
 
+const searchBills = asyncHandler(async (req, res) => {
+  const bills = await inventoryTransactionService.searchBills(req.query);
+  return sendSuccess(res, 200, "Bills fetched successfully", bills);
+});
+
+const getBillDetails = asyncHandler(async (req, res) => {
+  const bill = await inventoryTransactionService.getBillDetails(req.params.saleId);
+  return sendSuccess(res, 200, "Bill details fetched successfully", bill);
+});
+
+const returnBillItems = asyncHandler(async (req, res) => {
+  const result = await inventoryTransactionService.returnBillItems(req.body);
+  return sendSuccess(res, 200, "Items returned successfully", result);
+});
+
 module.exports = {
   createSaleTransaction,
   createStockTransaction,
-  lookupInventory,
+  getBillDetails,
   getSuggestions,
+  lookupInventory,
+  returnBillItems,
+  searchBills,
 };

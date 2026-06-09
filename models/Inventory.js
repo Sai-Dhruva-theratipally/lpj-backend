@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const { TAG_CODE_END, TAG_CODE_START } = require("../utils/tagCodeConstants");
 
 const inventorySchema = new mongoose.Schema(
   {
@@ -28,9 +27,9 @@ const inventorySchema = new mongoose.Schema(
       uppercase: true,
     },
     tagId: {
-      type: Number,
-      min: TAG_CODE_START,
-      max: TAG_CODE_END,
+      type: String,
+      trim: true,
+      uppercase: true,
       sparse: true,
       unique: true,
       index: true,
@@ -186,12 +185,18 @@ inventorySchema.pre("validate", function validateStockShape() {
   if (this.purity) {
     this.purity = this.purity.trim().toUpperCase();
   }
+  if (this.categoryCode) {
+    this.categoryCode = this.categoryCode.trim().toUpperCase();
+  }
+  if (this.tagId) {
+    this.tagId = String(this.tagId).trim().toUpperCase();
+  }
 
   if (this.stockType === "TAG") {
     if (!this.tagId) {
-      this.invalidate("tagId", "12 digit tag code is required for tag inventory");
-    } else if (!/^\d{12}$/.test(String(this.tagId))) {
-      this.invalidate("tagId", "Tag code must be exactly 12 digits");
+      this.invalidate("tagId", "Tag code is required for tag inventory");
+    } else if (!/^[A-Z0-9]{6}\d{5}$/.test(String(this.tagId)) && !/^\d{12}$/.test(String(this.tagId))) {
+      this.invalidate("tagId", "Tag code must be 6 category characters followed by 5 digits");
     }
 
     if (!this.category) {

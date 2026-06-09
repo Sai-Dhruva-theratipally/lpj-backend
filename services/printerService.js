@@ -21,7 +21,10 @@ const findInventoryForPrint = async ({ id, inventoryId, tagId, trayCode, trayNam
       filters.push({ _id: normalizedId });
     }
 
+    filters.push({ tagId: normalizedId, stockType: "TAG" });
+
     if (!Number.isNaN(numericId)) {
+      filters.push({ tagId: String(numericId), stockType: "TAG" });
       filters.push({ tagId: numericId, stockType: "TAG" });
     }
 
@@ -30,7 +33,13 @@ const findInventoryForPrint = async ({ id, inventoryId, tagId, trayCode, trayNam
   }
 
   if (tagId) {
-    filters.push({ tagId: Number(tagId), stockType: "TAG" });
+    const normalizedTagId = normalizeToUppercase(tagId);
+    const numericTagId = Number(normalizedTagId);
+    filters.push({ tagId: normalizedTagId, stockType: "TAG" });
+    if (!Number.isNaN(numericTagId)) {
+      filters.push({ tagId: String(numericTagId), stockType: "TAG" });
+      filters.push({ tagId: numericTagId, stockType: "TAG" });
+    }
   }
 
   if (trayCode) {
