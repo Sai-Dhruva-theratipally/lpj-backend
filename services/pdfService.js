@@ -4,6 +4,22 @@ const SHOP_NAME = "Lakshmi Prasanna Jewellers";
 
 const formatValue = (value) => {
   if (value === undefined || value === null || value === "") return "-";
+  
+  // Format dates as dd/mm/yyyy
+  if (value instanceof Date || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value))) {
+    try {
+      const date = typeof value === 'string' ? new Date(value) : value;
+      if (!isNaN(date.getTime())) {
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+      }
+    } catch (e) {
+      // Fall through to string conversion
+    }
+  }
+  
   return String(value);
 };
 
@@ -56,7 +72,7 @@ const streamReportPdf = (res, report) => {
   doc.moveDown(0.3);
   doc.fontSize(14).text(report.title);
   doc.moveDown(0.3);
-  doc.font("Helvetica").fontSize(9).text(`Generated: ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`);
+  doc.font("Helvetica").fontSize(9).text(`Generated: ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}`);
   doc.moveDown(0.6);
 
   doc.fontSize(9);

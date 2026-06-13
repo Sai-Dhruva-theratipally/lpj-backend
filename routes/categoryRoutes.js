@@ -1,7 +1,7 @@
 const express = require("express");
-const { createCategory, getCategories } = require("../controllers/categoryController");
+const { createCategory, getCategories, updateCategory, deleteCategory } = require("../controllers/categoryController");
 const { protect } = require("../middleware/authMiddleware");
-const { body, query, validationResult } = require("express-validator");
+const { body, query, validationResult, param } = require("express-validator");
 
 const router = express.Router();
 
@@ -40,6 +40,20 @@ router
     body("stockType").optional().isIn(["TAG", "TRAY"]).withMessage("Invalid stock type"),
     validateRequest,
     createCategory
+  );
+
+router
+  .route("/:id")
+  .put(
+    param("id").isMongoId().withMessage("Invalid category ID"),
+    body("name").optional().trim().notEmpty().withMessage("Category name cannot be empty"),
+    validateRequest,
+    updateCategory
+  )
+  .delete(
+    param("id").isMongoId().withMessage("Invalid category ID"),
+    validateRequest,
+    deleteCategory
   );
 
 module.exports = router;

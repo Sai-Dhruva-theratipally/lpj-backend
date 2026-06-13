@@ -1,4 +1,5 @@
 const Category = require("../models/Category");
+const Inventory = require("../models/Inventory");
 
 const normalizeToUppercase = (value) => value.trim().toUpperCase();
 const normalizeMetalType = (metalType) => metalType.trim().toUpperCase();
@@ -94,8 +95,62 @@ const findOrCreateCategory = async (name, stockType, metalType, categoryCode) =>
   });
 };
 
+const updateCategory = async (id, updateData) => {
+  const category = await Category.findById(id);
+  
+  if (!category) {
+    const error = new Error("Category not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (updateData.name) {
+    const normalizedName = normalizeToUppercase(updateData.name);
+    const existing = await Category.findOne({ 
+      _id: { $ne: id }, 
+      metalType: category.metalType, 
+      name: normalizedName 
+    });
+    
+    if (existing) {
+      const error = new Error("Category name already exists for this metal type");
+      error.statusCode = 409;
+      throw error;
+    }
+    
+    category.name = normalizedName;
+  }
+
+  return category.save();
+};
+
+const deleteCategory = async (id) => {
+  const category = await Category.findById(id);
+  
+  if (!category) {
+    const error = new Error("Category not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // Delete all inventory items associated with this category
+  const deleteResult = await Inventory.deleteMany({
+    category: category.name,
+  });
+
+  // Delete the category
+  await Category.findByIdAndDelete(id);
+  
+  return {
+    category,
+    deletedInventoryCount: deleteResult.deletedCount,
+  };
+};
+
 module.exports = {
   findCategoryByNameOrCode,
   findOrCreateCategory,
   getCategories,
+  updateCategory,
+  deleteCategory,
 };
