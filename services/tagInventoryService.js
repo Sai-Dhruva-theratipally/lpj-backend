@@ -20,6 +20,10 @@ const buildTagFilters = (query) => {
     filters.status = query.status;
   }
 
+  if (query.printStatus) {
+    filters.printStatus = query.printStatus;
+  }
+
   if (query.category) {
     filters.category = normalizeSearchRegex(query.category);
   }
@@ -138,6 +142,7 @@ const createTag = async (payload) => {
     sellerName: seller.name,
     purchaseDate: new Date(payload.date || payload.purchaseDate),
     status: "AVAILABLE",
+    printStatus: "NONE",
     isDeleted: false,
   });
 };
@@ -259,6 +264,54 @@ const deleteTag = async (id) => {
   return tag.save();
 };
 
+const updatePrintStatus = async (ids = [], printStatus = "PRINTED") => {
+  const normalizedIds = [...new Set(ids.map((value) => String(value || "").trim()).filter(Boolean))];
+
+  if (normalizedIds.length === 0) {
+    const error = new Error("At least one tag id is required");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const tags = await Inventory.find({
+    stockType: "TAG",
+    isDeleted: false,
+    $or: normalizedIds.flatMap((value) => {
+      const filters = [{ tagId: value }, { _id: value }];
+      if (/^\d+$/.test(value)) {
+        filters.push({ tagId: String(Number(value)) }, { tagId: Number(value) });
+      }
+      return filters;
+    }),
+  });
+
+  const updatedAt = new Date();
+  const updatedIds = [];
+
+  for (const tag of tags) {
+    tag.printStatus = printStatus;
+    if (printStatus === "PENDING_PRINT") {
+      tag.printQueuedAt = updatedAt;
+    } else if (printStatus === "PRINTED") {
+      tag.printedAt = updatedAt;
+      tag.printCount = Number(tag.printCount || 0) + 1;
+    }
+    updatedIds.push(tag._id);
+  }
+
+  if (tags.length > 0) {
+    await Promise.all(tags.map((tag) => tag.save()));
+  }
+
+  return {
+    matchedCount: tags.length,
+    modifiedCount: tags.length,
+    ids: updatedIds,
+    printStatus,
+    updatedAt,
+  };
+};
+
 module.exports = {
   cancelTagSale,
   createTag,
@@ -266,5 +319,6 @@ module.exports = {
   getTagById,
   getTags,
   sellTag,
+  updatePrintStatus,
   updateTag,
 };

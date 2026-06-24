@@ -37,6 +37,11 @@ const deleteTagStock = asyncHandler(async (req, res) => {
   return sendSuccess(res, 200, "Tag stock deleted successfully", tag);
 });
 
+const updateTagPrintStatus = asyncHandler(async (req, res) => {
+  const result = await tagInventoryService.updatePrintStatus(req.body.ids, req.body.status || "PRINTED");
+  return sendSuccess(res, 200, "Tag print status updated successfully", result);
+});
+
 module.exports = {
   addTagStock,
   cancelTagSale,
@@ -44,5 +49,6 @@ module.exports = {
   getTagStock,
   getTagStockById,
   sellTagStock,
+  updateTagPrintStatus,
   updateTagStock,
 };

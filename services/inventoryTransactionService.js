@@ -242,13 +242,14 @@ const createOrUpdateTrayFromStockItem = async (item, seller, transactionDate) =>
   };
 };
 
-const createTagsFromStockItem = async (item, seller, transactionDate, category) => {
+const createTagsFromStockItem = async (item, seller, transactionDate, category, options = {}) => {
   const quantity = Number(item.quantity || 1);
   const totalWeight = normalizeDecimal(item.weight);
   const totalStoneWeight = normalizeDecimal(item.stoneWeight);
   const perTagWeight = Number((totalWeight / quantity).toFixed(3));
   const perTagStoneWeight = Number((totalStoneWeight / quantity).toFixed(3));
   const rate = item.rate ? Number(item.rate) : undefined;
+  const printMode = String(options.printMode || "PRINT").toUpperCase();
   const transactionItems = [];
 
   for (let index = 0; index < quantity; index += 1) {
@@ -267,6 +268,8 @@ const createTagsFromStockItem = async (item, seller, transactionDate, category) 
       sellerName: seller.name,
       purchaseDate: transactionDate,
       status: "AVAILABLE",
+      printStatus: printMode === "QUEUE" ? "PENDING_PRINT" : "NONE",
+      printQueuedAt: printMode === "QUEUE" ? transactionDate : undefined,
       isDeleted: false,
     });
 
@@ -282,6 +285,7 @@ const createTagsFromStockItem = async (item, seller, transactionDate, category) 
       stoneWeight: tag.stoneWeight || 0,
       rate,
       sellerName: seller.name,
+      printStatus: tag.printStatus,
     });
   }
 
@@ -292,6 +296,7 @@ const createStockTransaction = async (payload) => {
   const seller = await sellerService.findOrCreateSeller(payload.sellerName);
   const transactionDate = new Date(payload.date);
   const transactionItems = [];
+  const printMode = String(payload.printMode || "PRINT").toUpperCase();
 
   for (const item of payload.items) {
     const category = await categoryService.findCategoryByNameOrCode({
@@ -307,7 +312,7 @@ const createStockTransaction = async (payload) => {
     }
 
     if (item.stockType === "TAG") {
-      const tagItems = await createTagsFromStockItem(item, seller, transactionDate, category);
+      const tagItems = await createTagsFromStockItem(item, seller, transactionDate, category, { printMode });
       transactionItems.push(...tagItems);
     } else {
       const trayItem = await createOrUpdateTrayFromStockItem(item, seller, transactionDate);

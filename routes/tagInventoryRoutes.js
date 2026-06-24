@@ -4,6 +4,7 @@ const { protect } = require("../middleware/authMiddleware");
 const {
   cancelSaleValidation,
   createTagValidation,
+  markPrintStatusValidation,
   listTagValidation,
   sellTagValidation,
   tagIdParam,
@@ -18,6 +19,8 @@ router
   .route("/")
   .post(createTagValidation, tagInventoryController.addTagStock)
   .get(listTagValidation, tagInventoryController.getTagStock);
+
+router.patch("/print-status", markPrintStatusValidation, tagInventoryController.updateTagPrintStatus);
 
 router
   .route("/:id")

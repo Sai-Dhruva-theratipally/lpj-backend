@@ -82,6 +82,7 @@ const listTagValidation = [
   query("page").optional().isInt({ min: 1 }).withMessage("Page must be at least 1"),
   query("limit").optional().isInt({ min: 1, max: 100 }).withMessage("Limit must be between 1 and 100"),
   query("status").optional().isIn(["AVAILABLE", "SOLD"]).withMessage("Invalid status"),
+  query("printStatus").optional().isIn(["NONE", "PENDING_PRINT", "PRINTED"]).withMessage("Invalid print status"),
   query("category").optional().trim(),
   query("metalType").optional().isIn(["GOLD", "SILVER", "OTHERS"]).withMessage("Invalid metal type"),
   query("seller").optional().trim(),
@@ -91,9 +92,17 @@ const listTagValidation = [
   validateRequest,
 ];
 
+const markPrintStatusValidation = [
+  body("ids").isArray({ min: 1, max: 200 }).withMessage("At least one tag id is required"),
+  body("ids.*").notEmpty().withMessage("Tag id cannot be empty"),
+  body("status").optional().isIn(["PRINTED", "PENDING_PRINT"]).withMessage("Invalid print status"),
+  validateRequest,
+];
+
 module.exports = {
   cancelSaleValidation,
   createTagValidation,
+  markPrintStatusValidation,
   listTagValidation,
   sellTagValidation,
   tagIdParam,

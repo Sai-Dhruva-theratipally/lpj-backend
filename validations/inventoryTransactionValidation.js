@@ -34,6 +34,7 @@ const stockTransactionValidation = [
   normalizeDateFields,
   body("sellerName").trim().notEmpty().withMessage("Seller name is required"),
   body("date").isISO8601().withMessage("Date is required and must be in ISO8601 format"),
+  body("printMode").optional().isIn(["PRINT", "QUEUE"]).withMessage("Invalid print mode"),
   body("items").isArray({ min: 1, max: 200 }).withMessage("At least one stock item is required"),
   body("items.*.metalType").isIn(["GOLD", "SILVER", "OTHERS"]).withMessage("Metal type is required"),
   body("items.*.stockType").isIn(["TAG", "TRAY"]).withMessage("Invalid inventory type"),

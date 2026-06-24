@@ -40,6 +40,25 @@ const inventorySchema = new mongoose.Schema(
       default: "AVAILABLE",
       index: true,
     },
+    printStatus: {
+      type: String,
+      enum: ["NONE", "PENDING_PRINT", "PRINTED"],
+      default: "NONE",
+      index: true,
+    },
+    printQueuedAt: {
+      type: Date,
+      index: true,
+    },
+    printedAt: {
+      type: Date,
+      index: true,
+    },
+    printCount: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
     tagNo: {
       type: String,
       trim: true,
