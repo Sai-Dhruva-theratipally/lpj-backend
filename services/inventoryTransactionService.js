@@ -39,6 +39,57 @@ const normalizeDecimal = (value, fallback = 0) => {
   return Number.isFinite(number) ? Number(number.toFixed(3)) : fallback;
 };
 
+const parseOptionalRate = (value) => {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? Number(number.toFixed(2)) : undefined;
+};
+
+const buildTransactionRates = (items = [], transactionType) => {
+  const rates = {
+    goldBuyRate: undefined,
+    goldSellRate: undefined,
+    silverBuyRate: undefined,
+    silverSellRate: undefined,
+  };
+
+  items.forEach((item) => {
+    const rate = parseOptionalRate(item.rate);
+
+    if (rate === undefined) {
+      return;
+    }
+
+    if (transactionType === "STOCK") {
+      if (item.metalType === "GOLD") {
+        rates.goldBuyRate = rate;
+      }
+
+      if (item.metalType === "SILVER") {
+        rates.silverBuyRate = rate;
+      }
+      return;
+    }
+
+    if (item.metalType === "GOLD") {
+      rates.goldSellRate = rate;
+    }
+
+    if (item.metalType === "SILVER") {
+      rates.silverSellRate = rate;
+    }
+  });
+
+  return rates;
+};
+
+const buildRegex = (value) => new RegExp(String(value).trim(), "i");
+
+const toUpperKey = (value) => String(value || "").trim().toUpperCase();
+
 const normalizeReceivedItems = (items = []) =>
   items
     .filter((item) => item && (item.itemType || item.metalType || item.category || item.weight || item.purity))
@@ -131,6 +182,7 @@ const createOrUpdateTrayFromStockItem = async (item, seller, transactionDate) =>
   const quantity = Number(item.quantity);
   const weight = normalizeDecimal(item.weight);
   const stoneWeight = normalizeDecimal(item.stoneWeight);
+  const rate = item.rate ? Number(item.rate) : undefined;
 
   let tray = await Inventory.findOne({
     stockType: "TRAY",
@@ -186,6 +238,7 @@ const createOrUpdateTrayFromStockItem = async (item, seller, transactionDate) =>
     quantity,
     weight,
     stoneWeight,
+    rate,
   };
 };
 
@@ -195,6 +248,7 @@ const createTagsFromStockItem = async (item, seller, transactionDate, category) 
   const totalStoneWeight = normalizeDecimal(item.stoneWeight);
   const perTagWeight = Number((totalWeight / quantity).toFixed(3));
   const perTagStoneWeight = Number((totalStoneWeight / quantity).toFixed(3));
+  const rate = item.rate ? Number(item.rate) : undefined;
   const transactionItems = [];
 
   for (let index = 0; index < quantity; index += 1) {
@@ -226,6 +280,7 @@ const createTagsFromStockItem = async (item, seller, transactionDate, category) 
       quantity: 1,
       weight: tag.weight,
       stoneWeight: tag.stoneWeight || 0,
+      rate,
       sellerName: seller.name,
     });
   }
@@ -263,6 +318,7 @@ const createStockTransaction = async (payload) => {
   const totalItems = transactionItems.reduce((sum, item) => sum + Number(item.quantity), 0);
   const totalWeight = Number(transactionItems.reduce((sum, item) => sum + Number(item.weight), 0).toFixed(3));
   const totalStoneWeight = Number(transactionItems.reduce((sum, item) => sum + Number(item.stoneWeight || 0), 0).toFixed(3));
+  const rates = buildTransactionRates(transactionItems, "STOCK");
 
   return StockTransaction.create({
     transactionId: await getNextStockTransactionId(),
@@ -273,12 +329,7 @@ const createStockTransaction = async (payload) => {
     totalItems,
     totalWeight,
     totalStoneWeight,
-    rates: {
-      goldBuyRate: payload.rates?.goldBuyRate || 0,
-      goldSellRate: payload.rates?.goldSellRate || 0,
-      silverBuyRate: payload.rates?.silverBuyRate || 0,
-      silverSellRate: payload.rates?.silverSellRate || 0,
-    },
+    rates,
   });
 };
 
@@ -286,6 +337,7 @@ const applyTraySale = async (inventory, item, saleDate) => {
   const quantity = Number(item.quantity || 1);
   const weight = normalizeDecimal(item.weight);
   const stoneWeight = normalizeDecimal(item.stoneWeight);
+  const rate = item.rate ? Number(item.rate) : undefined;
 
   if (quantity > inventory.quantity) {
     const error = new Error(`Cannot sell more quantity than available in tray ${inventory.trayCode || inventory.trayName}`);
@@ -324,10 +376,11 @@ const applyTraySale = async (inventory, item, saleDate) => {
     quantity,
     weight,
     stoneWeight,
+    rate,
   };
 };
 
-const applyTagSale = async (inventory, saleDate) => {
+const applyTagSale = async (inventory, item, saleDate) => {
   if (inventory.status !== "AVAILABLE") {
     const error = new Error(`Tag ${inventory.tagId} is not available`);
     error.statusCode = 400;
@@ -337,6 +390,8 @@ const applyTagSale = async (inventory, saleDate) => {
   inventory.status = "SOLD";
   inventory.saleDate = saleDate;
   await inventory.save();
+
+  const rate = item.rate ? Number(item.rate) : undefined;
 
   return {
     inventoryId: inventory._id,
@@ -349,6 +404,7 @@ const applyTagSale = async (inventory, saleDate) => {
     quantity: inventory.pieces || 1,
     weight: inventory.weight,
     stoneWeight: inventory.stoneWeight || 0,
+    rate,
   };
 };
 
@@ -368,7 +424,7 @@ const createSaleTransaction = async (payload) => {
     }
 
     if (inventory.stockType === "TAG") {
-      saleItems.push(await applyTagSale(inventory, saleDate));
+      saleItems.push(await applyTagSale(inventory, item, saleDate));
     } else {
       saleItems.push(await applyTraySale(inventory, item, saleDate));
     }
@@ -379,6 +435,7 @@ const createSaleTransaction = async (payload) => {
   const totalStoneWeight = Number(saleItems.reduce((sum, item) => sum + Number(item.stoneWeight || 0), 0).toFixed(3));
   const receivedItems = normalizeReceivedItems(payload.receivedItems);
   const totalReceivedWeight = Number(receivedItems.reduce((sum, item) => sum + Number(item.weight || 0), 0).toFixed(3));
+  const rates = buildTransactionRates(saleItems, "SALE");
 
   return SaleTransaction.create({
     saleId: await getNextSaleId(),
@@ -390,12 +447,7 @@ const createSaleTransaction = async (payload) => {
     totalStoneWeight,
     receivedItems,
     totalReceivedWeight,
-    rates: {
-      goldBuyRate: payload.rates?.goldBuyRate || 0,
-      goldSellRate: payload.rates?.goldSellRate || 0,
-      silverBuyRate: payload.rates?.silverBuyRate || 0,
-      silverSellRate: payload.rates?.silverSellRate || 0,
-    },
+    rates,
   });
 };
 
@@ -496,6 +548,169 @@ const searchBills = async (query = {}) => {
     receivedWeight: Number((bill.totalReceivedWeight || 0).toFixed(3)),
     status: bill.status || "ACTIVE",
   }));
+};
+
+const getSoldItems = async (query = {}) => {
+  const match = {};
+  const sortDirection = String(query.sortOrder || query.sortByDate || "desc").toLowerCase() === "asc" ? 1 : -1;
+
+  if (query.saleId) {
+    match.saleId = buildRegex(query.saleId);
+  }
+
+  if (query.customer) {
+    match.customerName = buildRegex(query.customer);
+  }
+
+  if (query.fromDate || query.toDate) {
+    match.date = {};
+    if (query.fromDate) {
+      match.date.$gte = new Date(query.fromDate);
+    }
+    if (query.toDate) {
+      const end = new Date(query.toDate);
+      end.setHours(23, 59, 59, 999);
+      match.date.$lte = end;
+    }
+  }
+
+  const bills = await SaleTransaction.find(match)
+    .select("saleId customerName date status items")
+    .sort({ date: sortDirection })
+    .lean();
+
+  const activeItems = bills.flatMap((bill) =>
+    (bill.items || [])
+      .filter((item) => !item.isReturned)
+      .map((item, index) => ({
+        saleId: bill.saleId,
+        saleDate: bill.date,
+        billStatus: bill.status || "ACTIVE",
+        customerName: bill.customerName,
+        saleItemIndex: index,
+        ...item,
+      }))
+  );
+
+  const inventoryIds = [...new Set(activeItems.map((item) => String(item.inventoryId || "")).filter(Boolean))];
+
+  const [stockTransactions, inventories] = await Promise.all([
+    inventoryIds.length
+      ? StockTransaction.find({ "items.inventoryId": { $in: inventoryIds } })
+          .select("sellerName date items")
+          .sort({ date: -1 })
+          .lean()
+      : Promise.resolve([]),
+    inventoryIds.length ? Inventory.find({ _id: { $in: inventoryIds } }).select("purchaseDate sellerName").lean() : Promise.resolve([]),
+  ]);
+
+  const purchaseMap = new Map();
+
+  stockTransactions.forEach((transaction) => {
+    (transaction.items || []).forEach((item) => {
+      const inventoryId = String(item.inventoryId || "");
+      if (!inventoryId || purchaseMap.has(inventoryId)) {
+        return;
+      }
+
+      purchaseMap.set(inventoryId, {
+        sellerName: transaction.sellerName || item.sellerName || "",
+        dateBought: transaction.date || null,
+        rateBought: Number(item.rate || 0),
+      });
+    });
+  });
+
+  inventories.forEach((inventory) => {
+    const inventoryId = String(inventory._id || "");
+    if (!inventoryId || purchaseMap.has(inventoryId)) {
+      return;
+    }
+
+    purchaseMap.set(inventoryId, {
+      sellerName: inventory.sellerName || "",
+      dateBought: inventory.purchaseDate || null,
+      rateBought: 0,
+    });
+  });
+
+  const rows = activeItems
+    .map((item) => {
+      const inventoryId = String(item.inventoryId || "");
+      const purchase = purchaseMap.get(inventoryId) || {};
+
+      return {
+        id: `${item.saleId}-${item.saleItemIndex}-${inventoryId}`,
+        saleId: item.saleId,
+        customerName: item.customerName,
+        dateSold: item.saleDate,
+        dateBought: purchase.dateBought,
+        sellerName: purchase.sellerName || item.sellerName || "",
+        metalType: item.metalType,
+        category: item.category,
+        categoryCode: item.categoryCode,
+        stockType: item.stockType,
+        tagId: item.tagId || "",
+        trayCode: item.trayCode || "",
+        quantity: Number(item.quantity || 0),
+        weight: Number(item.weight || 0),
+        stoneWeight: Number(item.stoneWeight || 0),
+        rateBought: Number(purchase.rateBought || 0),
+        rateSold: Number(item.rate || 0),
+        soldAmount: Number((Number(item.rate || 0) * Number(item.weight || 0)).toFixed(2)),
+        billStatus: item.billStatus,
+      };
+    })
+    .filter((row) => {
+      const searchMetal = String(query.metalType || "").toUpperCase();
+      if (searchMetal && row.metalType !== searchMetal) {
+        return false;
+      }
+
+      if (query.category && !buildRegex(query.category).test(String(row.category || ""))) {
+        return false;
+      }
+
+      if (query.seller && !buildRegex(query.seller).test(String(row.sellerName || ""))) {
+        return false;
+      }
+
+      if (query.stockType && row.stockType !== query.stockType) {
+        return false;
+      }
+
+      if (query.tagId) {
+        const needle = toUpperKey(query.tagId);
+        const haystack = `${toUpperKey(row.tagId)} ${toUpperKey(row.trayCode)}`;
+        if (!haystack.includes(needle)) {
+          return false;
+        }
+      }
+
+      if (query.minCost !== undefined && query.minCost !== "" && Number(row.rateSold) < Number(query.minCost)) {
+        return false;
+      }
+
+      if (query.maxCost !== undefined && query.maxCost !== "" && Number(row.rateSold) > Number(query.maxCost)) {
+        return false;
+      }
+
+      if (query.minRate !== undefined && query.minRate !== "" && Number(row.rateSold) < Number(query.minRate)) {
+        return false;
+      }
+
+      if (query.maxRate !== undefined && query.maxRate !== "" && Number(row.rateSold) > Number(query.maxRate)) {
+        return false;
+      }
+
+      return true;
+    })
+    .sort((first, second) => {
+      const diff = new Date(first.dateSold) - new Date(second.dateSold);
+      return sortDirection === 1 ? diff : -diff;
+    });
+
+  return rows;
 };
 
 const getBillDetails = async (saleId) => {
@@ -678,6 +893,7 @@ module.exports = {
   getBillDetails,
   getInventoryLookup,
   getSuggestions,
+  getSoldItems,
   returnBillItems,
   searchBills,
 };

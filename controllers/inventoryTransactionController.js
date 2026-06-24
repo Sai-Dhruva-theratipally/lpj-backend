@@ -7,8 +7,8 @@ const createStockTransaction = asyncHandler(async (req, res) => {
   const transaction = await inventoryTransactionService.createStockTransaction(req.body);
   
   // Save rates used in this transaction
-  if (req.body.rates && transaction._id) {
-    await manualRateService.saveTransactionRates(transaction._id, "StockTransaction", req.body.rates);
+  if (transaction._id) {
+    await manualRateService.saveTransactionRates(transaction._id, "StockTransaction", transaction.rates || {});
   }
   
   return sendSuccess(res, 201, "Stock transaction saved successfully", transaction);
@@ -18,8 +18,8 @@ const createSaleTransaction = asyncHandler(async (req, res) => {
   const sale = await inventoryTransactionService.createSaleTransaction(req.body);
   
   // Save rates used in this transaction
-  if (req.body.rates && sale._id) {
-    await manualRateService.saveTransactionRates(sale._id, "SaleTransaction", req.body.rates);
+  if (sale._id) {
+    await manualRateService.saveTransactionRates(sale._id, "SaleTransaction", sale.rates || {});
   }
   
   return sendSuccess(res, 201, "Sale transaction saved successfully", sale);
@@ -41,6 +41,11 @@ const searchBills = asyncHandler(async (req, res) => {
   return sendSuccess(res, 200, "Bills fetched successfully", bills);
 });
 
+const getSoldItems = asyncHandler(async (req, res) => {
+  const items = await inventoryTransactionService.getSoldItems(req.query);
+  return sendSuccess(res, 200, "Sold items fetched successfully", items);
+});
+
 const getBillDetails = asyncHandler(async (req, res) => {
   const bill = await inventoryTransactionService.getBillDetails(req.params.saleId);
   return sendSuccess(res, 200, "Bill details fetched successfully", bill);
@@ -57,6 +62,7 @@ module.exports = {
   getBillDetails,
   getSuggestions,
   lookupInventory,
+  getSoldItems,
   returnBillItems,
   searchBills,
 };

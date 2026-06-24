@@ -50,6 +50,10 @@ const stockTransactionValidation = [
     .optional({ nullable: true })
     .isFloat({ min: 0 })
     .withMessage("Stone weight must be greater than or equal to 0"),
+  body("items.*.rate")
+    .optional({ nullable: true })
+    .isFloat({ min: 0 })
+    .withMessage("Rate must be a non-negative number"),
   body("items.*.categoryInput").optional().trim().notEmpty().withMessage("Category or tray search value cannot be empty"),
   body("items.*.category").optional().trim().notEmpty().withMessage("Category cannot be empty"),
   body("items.*.categoryCode").optional().trim().notEmpty().withMessage("Category code cannot be empty"),
@@ -78,6 +82,10 @@ const saleTransactionValidation = [
     .optional({ nullable: true })
     .isFloat({ min: 0 })
     .withMessage("Stone weight must be greater than or equal to 0"),
+  body("items.*.rate")
+    .optional({ nullable: true })
+    .isFloat({ min: 0 })
+    .withMessage("Rate must be a non-negative number"),
   body("receivedItems").optional().isArray({ max: 100 }).withMessage("Received items must be a list"),
   body("receivedItems.*.itemType")
     .optional()

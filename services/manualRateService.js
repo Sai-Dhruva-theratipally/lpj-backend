@@ -1,4 +1,6 @@
 const ManualRate = require("../models/ManualRate");
+const StockTransaction = require("../models/StockTransaction");
+const SaleTransaction = require("../models/SaleTransaction");
 
 // Get latest rates for all metal types and rate types
 const getLatestRates = async () => {
@@ -55,39 +57,60 @@ const recordRate = async (metalType, rateType, rate, options = {}) => {
   return manualRate;
 };
 
+const buildCreatedAtRange = (query = {}) => {
+  const range = {};
+
+  if (query.fromDate) {
+    range.$gte = new Date(query.fromDate);
+  }
+
+  if (query.toDate) {
+    const end = new Date(query.toDate);
+    end.setHours(23, 59, 59, 999);
+    range.$lte = end;
+  }
+
+  return Object.keys(range).length > 0 ? range : null;
+};
+
+const mapRateHistoryRows = (transactions, transactionType) => {
+  return transactions.map((transaction) => ({
+    id: `${transactionType}-${transaction._id}`,
+    transactionType,
+    dateTime: transaction.createdAt || transaction.date,
+    goldBought: Number(transaction.rates?.goldBuyRate || 0),
+    goldSold: Number(transaction.rates?.goldSellRate || 0),
+    silverBought: Number(transaction.rates?.silverBuyRate || 0),
+    silverSold: Number(transaction.rates?.silverSellRate || 0),
+  }));
+};
+
 // Get rate history with filters
 const getRateHistory = async (query = {}) => {
-  const filters = {};
+  const createdAtRange = buildCreatedAtRange(query);
+  const match = createdAtRange ? { createdAt: createdAtRange } : {};
 
-  if (query.metalType) {
-    filters.metalType = query.metalType.toUpperCase();
-  }
+  const [stockTransactions, saleTransactions] = await Promise.all([
+    StockTransaction.find(match).select("rates createdAt date").sort({ createdAt: -1 }).lean(),
+    SaleTransaction.find(match).select("rates createdAt date").sort({ createdAt: -1 }).lean(),
+  ]);
 
-  if (query.rateType) {
-    filters.rateType = query.rateType.toUpperCase();
-  }
+  const metalType = query.metalType ? query.metalType.toUpperCase() : "";
+  const rows = [...mapRateHistoryRows(stockTransactions, "STOCK"), ...mapRateHistoryRows(saleTransactions, "SALE")].filter(
+    (row) => {
+      if (metalType === "GOLD") {
+        return row.goldBought > 0 || row.goldSold > 0;
+      }
 
-  if (query.source) {
-    filters.source = query.source.toUpperCase();
-  }
+      if (metalType === "SILVER") {
+        return row.silverBought > 0 || row.silverSold > 0;
+      }
 
-  if (query.fromDate || query.toDate) {
-    filters.createdAt = {};
-    if (query.fromDate) {
-      filters.createdAt.$gte = new Date(query.fromDate);
+      return row.goldBought > 0 || row.goldSold > 0 || row.silverBought > 0 || row.silverSold > 0;
     }
-    if (query.toDate) {
-      const end = new Date(query.toDate);
-      end.setDate(end.getDate() + 1);
-      filters.createdAt.$lt = end;
-    }
-  }
+  );
 
-  const rates = await ManualRate.find(filters)
-    .sort({ createdAt: -1 })
-    .lean();
-
-  return rates;
+  return rows.sort((first, second) => new Date(second.dateTime) - new Date(first.dateTime));
 };
 
 // Save rates from a transaction

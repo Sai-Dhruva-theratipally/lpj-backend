@@ -17,6 +17,7 @@ router.get("/lookup/:identifier", lookupValidation, inventoryTransactionControll
 
 // Bill endpoints - specific routes BEFORE parameterized routes
 router.get("/bills/search", inventoryTransactionController.searchBills);
+router.get("/sold-items", inventoryTransactionController.getSoldItems);
 router.post("/bills/return", inventoryTransactionController.returnBillItems);
 router.get("/bills/:saleId", inventoryTransactionController.getBillDetails);
 

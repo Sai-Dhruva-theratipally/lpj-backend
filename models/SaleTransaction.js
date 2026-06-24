@@ -64,6 +64,11 @@ const saleTransactionItemSchema = new mongoose.Schema(
       min: 0,
       default: 0,
     },
+    rate: {
+      type: Number,
+      min: 0,
+      sparse: true,
+    },
     isReturned: {
       type: Boolean,
       default: false,
