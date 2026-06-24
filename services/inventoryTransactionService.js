@@ -273,6 +273,12 @@ const createStockTransaction = async (payload) => {
     totalItems,
     totalWeight,
     totalStoneWeight,
+    rates: {
+      goldBuyRate: payload.rates?.goldBuyRate || 0,
+      goldSellRate: payload.rates?.goldSellRate || 0,
+      silverBuyRate: payload.rates?.silverBuyRate || 0,
+      silverSellRate: payload.rates?.silverSellRate || 0,
+    },
   });
 };
 
@@ -384,6 +390,12 @@ const createSaleTransaction = async (payload) => {
     totalStoneWeight,
     receivedItems,
     totalReceivedWeight,
+    rates: {
+      goldBuyRate: payload.rates?.goldBuyRate || 0,
+      goldSellRate: payload.rates?.goldSellRate || 0,
+      silverBuyRate: payload.rates?.silverBuyRate || 0,
+      silverSellRate: payload.rates?.silverSellRate || 0,
+    },
   });
 };
 

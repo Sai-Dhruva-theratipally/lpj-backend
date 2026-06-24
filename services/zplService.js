@@ -43,8 +43,8 @@ const generateManualTextTagLabelZpl = (item) => {
     throw error;
   }
 
-  if (!/^\d+$/.test(code)) {
-    const error = new Error("Code must be numeric for manual tag printing");
+  if (!code || code === "-") {
+    const error = new Error("Code is required for manual tag printing");
     error.statusCode = 400;
     throw error;
   }
@@ -57,7 +57,7 @@ const generateManualTextTagLabelZpl = (item) => {
     "^LH0,0",
     "^PR3",
     "^MD20",
-    // Manual text-only tag: category on the left, numeric code on the right.
+    // Manual text-only tag: category on the left, text/numeric/symbol code on the right.
     `^FO26,36^A0N,42,38^FD${category}^FS`,
     `^FO410,34^A0N,46,42^FD${code}^FS`,
     "^XZ",

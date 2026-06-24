@@ -1,14 +1,27 @@
 const asyncHandler = require("../middleware/asyncHandler");
 const inventoryTransactionService = require("../services/inventoryTransactionService");
+const manualRateService = require("../services/manualRateService");
 const { sendSuccess } = require("../utils/apiResponse");
 
 const createStockTransaction = asyncHandler(async (req, res) => {
   const transaction = await inventoryTransactionService.createStockTransaction(req.body);
+  
+  // Save rates used in this transaction
+  if (req.body.rates && transaction._id) {
+    await manualRateService.saveTransactionRates(transaction._id, "StockTransaction", req.body.rates);
+  }
+  
   return sendSuccess(res, 201, "Stock transaction saved successfully", transaction);
 });
 
 const createSaleTransaction = asyncHandler(async (req, res) => {
   const sale = await inventoryTransactionService.createSaleTransaction(req.body);
+  
+  // Save rates used in this transaction
+  if (req.body.rates && sale._id) {
+    await manualRateService.saveTransactionRates(sale._id, "SaleTransaction", req.body.rates);
+  }
+  
   return sendSuccess(res, 201, "Sale transaction saved successfully", sale);
 });
 

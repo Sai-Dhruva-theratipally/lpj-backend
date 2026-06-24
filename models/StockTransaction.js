@@ -114,6 +114,28 @@ const stockTransactionSchema = new mongoose.Schema(
       min: 0,
       default: 0,
     },
+    rates: {
+      goldBuyRate: {
+        type: Number,
+        min: 0,
+        default: 0,
+      },
+      goldSellRate: {
+        type: Number,
+        min: 0,
+        default: 0,
+      },
+      silverBuyRate: {
+        type: Number,
+        min: 0,
+        default: 0,
+      },
+      silverSellRate: {
+        type: Number,
+        min: 0,
+        default: 0,
+      },
+    },
   },
   {
     timestamps: true,
