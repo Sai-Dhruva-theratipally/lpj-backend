@@ -120,7 +120,7 @@ const groupTransactionBy = (field, labelField = "label") => [
 ];
 
 const inventoryMatch = (query = {}) => {
-  const match = { isDeleted: { $ne: true } };
+  const match = { isDeleted: { $ne: true }, status: "AVAILABLE" };
   const dateRange = toDateRange(query);
 
   if (dateRange) match.purchaseDate = dateRange;

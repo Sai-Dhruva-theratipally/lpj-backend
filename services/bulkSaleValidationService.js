@@ -221,7 +221,7 @@ const validateBulkSaleRows = async (rows = []) => {
     }
 
     validateRate(normalizedRow, errors);
-    validateReceivedFields(normalizedRow, errors);
+    validateReceivedFields({ ...displayRow, ...normalizedRow }, errors);
 
     const inventory = hasValue(normalizedRow.barcode) ? await findInventoryByBarcode(normalizedRow.barcode) : null;
     if (!inventory && hasValue(normalizedRow.barcode)) {
