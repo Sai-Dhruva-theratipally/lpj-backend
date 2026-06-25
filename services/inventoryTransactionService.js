@@ -98,7 +98,7 @@ const normalizeReceivedItems = (items = []) =>
       metalType: normalizeToUppercase(item.metalType || ""),
       category: normalizeToUppercase(item.category || ""),
       weight: normalizeDecimal(item.weight),
-      purity: normalizeToUppercase(item.purity || ""),
+      purity: item.purity !== undefined && item.purity !== null ? String(item.purity).trim() : "",
     }));
 
 const findInventoryByIdentifier = async (identifier) => {

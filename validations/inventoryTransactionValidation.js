@@ -115,6 +115,13 @@ const saleTransactionValidation = [
       throw new Error("Purity is required for old ornaments");
     }
 
+    if (item.itemType === "OLD_ORNAMENT") {
+      const purity = Number(item.purity);
+      if (!Number.isFinite(purity) || purity < 0 || purity > 100) {
+        throw new Error("Purity for old ornaments must be a percentage between 0 and 100");
+      }
+    }
+
     return true;
   }),
   validateRequest,

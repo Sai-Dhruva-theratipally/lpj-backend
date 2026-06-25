@@ -21,6 +21,12 @@ router.get("/sold-items", inventoryTransactionController.getSoldItems);
 router.post("/bills/return", inventoryTransactionController.returnBillItems);
 router.get("/bills/:saleId", inventoryTransactionController.getBillDetails);
 
+// Bulk sale import endpoints
+router.post("/bulk-sales/parse", inventoryTransactionController.parseBulkSaleJsonText);
+router.post("/bulk-sales/validate", inventoryTransactionController.validateBulkSaleImport);
+router.post("/bulk-sales/preview", inventoryTransactionController.previewBulkSaleImport);
+router.post("/bulk-sales/create", inventoryTransactionController.createBulkSaleImport);
+
 // Transaction creation endpoints
 router.post("/stock-transactions", stockTransactionValidation, inventoryTransactionController.createStockTransaction);
 router.post("/sale-transactions", saleTransactionValidation, inventoryTransactionController.createSaleTransaction);

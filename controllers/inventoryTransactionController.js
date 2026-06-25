@@ -1,4 +1,7 @@
 const asyncHandler = require("../middleware/asyncHandler");
+const { parseBulkSaleJson } = require("../services/bulkSaleJsonParserService");
+const bulkSaleService = require("../services/bulkSaleService");
+const { validateBulkSaleRows } = require("../services/bulkSaleValidationService");
 const inventoryTransactionService = require("../services/inventoryTransactionService");
 const manualRateService = require("../services/manualRateService");
 const { sendSuccess } = require("../utils/apiResponse");
@@ -56,13 +59,42 @@ const returnBillItems = asyncHandler(async (req, res) => {
   return sendSuccess(res, 200, "Items returned successfully", result);
 });
 
+const parseBulkSaleJsonText = asyncHandler(async (req, res) => {
+  const rows = parseBulkSaleJson(req.body.jsonText);
+  return sendSuccess(res, 200, "Bulk sale JSON parsed successfully", { rows });
+});
+
+const validateBulkSaleImport = asyncHandler(async (req, res) => {
+  const result = await validateBulkSaleRows(req.body.rows || []);
+  return sendSuccess(res, 200, "Bulk sale rows validated successfully", result);
+});
+
+const previewBulkSaleImport = asyncHandler(async (req, res) => {
+  const validation = await validateBulkSaleRows(req.body.rows || []);
+  if (!validation.isValid) {
+    return sendSuccess(res, 200, "Bulk sale rows contain validation errors", validation);
+  }
+
+  const result = await bulkSaleService.getBulkSalePreview(validation.rows);
+  return sendSuccess(res, 200, "Bulk sale preview generated successfully", result);
+});
+
+const createBulkSaleImport = asyncHandler(async (req, res) => {
+  const result = await bulkSaleService.createBulkSales(req.body.rows || []);
+  return sendSuccess(res, 201, "Bulk sales created successfully", result);
+});
+
 module.exports = {
+  createBulkSaleImport,
   createSaleTransaction,
   createStockTransaction,
   getBillDetails,
   getSuggestions,
   lookupInventory,
+  parseBulkSaleJsonText,
+  previewBulkSaleImport,
   getSoldItems,
   returnBillItems,
+  validateBulkSaleImport,
   searchBills,
 };
