@@ -1,5 +1,6 @@
 const asyncHandler = require("../middleware/asyncHandler");
 const { parseBulkSaleJson } = require("../services/bulkSaleJsonParserService");
+const aiSaleImageImportService = require("../services/aiSaleImageImportService");
 const bulkSaleService = require("../services/bulkSaleService");
 const { validateBulkSaleRows } = require("../services/bulkSaleValidationService");
 const inventoryTransactionService = require("../services/inventoryTransactionService");
@@ -64,6 +65,16 @@ const parseBulkSaleJsonText = asyncHandler(async (req, res) => {
   return sendSuccess(res, 200, "Bulk sale JSON parsed successfully", { rows });
 });
 
+const extractBulkSaleImage = asyncHandler(async (req, res) => {
+  const extraction = await aiSaleImageImportService.extractSaleRowsFromImages(req.files || []);
+  const validation = await validateBulkSaleRows(extraction.rows);
+
+  return sendSuccess(res, 200, "Sale list image extracted successfully", {
+    ...extraction,
+    ...validation,
+  });
+});
+
 const validateBulkSaleImport = asyncHandler(async (req, res) => {
   const result = await validateBulkSaleRows(req.body.rows || []);
   return sendSuccess(res, 200, "Bulk sale rows validated successfully", result);
@@ -88,6 +99,7 @@ module.exports = {
   createBulkSaleImport,
   createSaleTransaction,
   createStockTransaction,
+  extractBulkSaleImage,
   getBillDetails,
   getSuggestions,
   lookupInventory,

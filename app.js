@@ -4,7 +4,6 @@ const express = require("express");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const corsOptions = require("./config/corsOptions");
-const aiRoutes = require("./routes/aiRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const authRoutes = require("./routes/authRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
@@ -39,7 +38,6 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/admin", adminRoutes);
-app.use("/api/ai", aiRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/documents", documentRoutes);
