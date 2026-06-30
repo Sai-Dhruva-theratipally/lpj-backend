@@ -20,6 +20,22 @@ const normalizeReceivedType = (value) => {
   return text;
 };
 
+const applyInventoryDrivenValues = (row, saleItem, inventory) => {
+  if (!saleItem || !inventory || saleItem.stockType !== "TAG") {
+    return row;
+  }
+
+  return {
+    ...row,
+    quantity: saleItem.quantity,
+    grossWeight: saleItem.weight,
+    stoneWeight: saleItem.stoneWeight,
+    category: saleItem.category || inventory.category,
+    categoryCode: saleItem.categoryCode || inventory.categoryCode,
+    metalType: saleItem.metalType || inventory.metalType,
+  };
+};
+
 const findInventoryByBarcode = async (barcode) => {
   const normalizedBarcode = toUpperKey(barcode);
   const numericBarcode = Number(normalizedBarcode);
@@ -229,6 +245,7 @@ const validateBulkSaleRows = async (rows = []) => {
     }
 
     const saleItem = buildValidatedSaleItem(normalizedRow, inventory, errors);
+    const rowWithInventoryValues = applyInventoryDrivenValues(displayRow, saleItem, inventory);
 
     if (inventory && inventory.status === "AVAILABLE") {
       const key = String(inventory._id);
@@ -259,7 +276,7 @@ const validateBulkSaleRows = async (rows = []) => {
     }
 
     validatedRows.push({
-      ...displayRow,
+      ...rowWithInventoryValues,
       status: errors.length === 0 ? "VALID" : "INVALID",
       errors,
       customerExists: existingCustomers.has(toUpperKey(normalizedRow.customerName)),
